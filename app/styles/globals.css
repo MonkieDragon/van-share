@@ -1,0 +1,63 @@
+@import url("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), sans-serif;
+}
+
+/* Leaflet default styles */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+}
+
+.leaflet-tooltip.distance-callout {
+  background: #1e40af;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+input,
+textarea,
+select {
+  color: #111;
+  background-color: #fff;
+}
+
+::placeholder {
+  color: #666;
+  opacity: 1;
+}
+
+/* Dropdown fixes */
+.autocomplete-dropdown {
+  background: white;
+  color: #111;
+  border: 1px solid #ccc;
+}
+
+/* react-day-picker: days with at least one journey */
+.day-with-journeys button {
+  position: relative;
+}
+.day-with-journeys button::after {
+  content: "";
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: #2563eb;
+  margin: 2px auto 0;
+}

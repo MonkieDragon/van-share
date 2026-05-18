@@ -1,0 +1,370 @@
+# Van Share Cursor Rules
+
+## Product Understanding
+
+This project is a lightweight shared private transfer coordination platform.
+
+It is NOT:
+- Uber
+- Grab
+- a taxi dispatch app
+- a realtime logistics platform
+
+The goal is:
+- helping travelers share private van transfers
+- aggregating demand
+- enabling operators to fulfill grouped journeys
+
+---
+
+# Technical Rules
+
+## Keep architecture simple
+
+Prefer:
+- simple CRUD flows
+- stable folder structure
+- reusable components
+- minimal dependencies
+
+Avoid:
+- unnecessary abstractions
+- premature optimization
+- large architectural rewrites
+
+---
+
+# UI Rules
+
+## Mobile-first
+
+Most users will be tourists on phones.
+
+Prioritize:
+- readability
+- touch-friendly layouts
+- fast loading
+- clear CTAs
+
+---
+
+## High contrast only
+
+Never use:
+- pale gray text on white backgrounds
+- low contrast buttons
+- weak hover states
+
+Explicitly define text colors where necessary.
+
+---
+
+## Reduce friction
+
+Avoid unnecessary:
+- signups
+- account creation
+- forms
+- steps
+
+Users should browse journeys immediately.
+
+---
+
+# Product Rules
+
+## Preserve premium experience
+
+Avoid recreating the downsides of shared vans.
+
+Limit:
+- excessive pickups
+- long detours
+- complicated routing
+
+The product should still feel more premium than standard shared vans.
+
+---
+
+## Journey-first model
+
+The core object is:
+- journey
+
+NOT:
+- user accounts
+- rides
+- driver dispatch
+
+---
+
+# Mapping Rules
+
+Maps are secondary UX.
+
+Do not build:
+- live tracking
+- realtime driver maps
+- complex route optimization
+
+Simple pickup visualization is enough.
+
+---
+
+# Backend Rules
+
+Use Supabase simply.
+
+Prefer:
+- straightforward queries
+- predictable schema
+- clear table naming
+
+Use snake_case consistently.
+
+Example:
+- journeys
+- journey_participants
+- operator_claims
+
+Avoid inconsistent naming.
+
+---
+
+# Folder Structure Rules
+
+Do not repeatedly rename folders/components.
+
+Maintain stable naming conventions.
+
+Suggested structure:
+
+/app
+/components
+/lib
+/types
+
+---
+
+# Suggested App Structure
+
+/app
+  /(public)
+    page.tsx
+    journeys/page.tsx
+    journeys/[id]/page.tsx
+    create-journey/page.tsx
+    join/[id]/page.tsx
+
+  /operator
+    dashboard/page.tsx
+    journeys/page.tsx
+
+  /api
+    /journeys
+    /participants
+    /operators
+
+/components
+  /Journey
+  /Operator
+  /Map
+  /UI
+
+/lib
+  /supabase
+  /maps
+  /utils
+
+/types
+
+---
+
+# Database Philosophy
+
+The database should reflect the business model.
+
+Primary entities:
+- journeys
+- journey_participants
+- operators
+- operator_claims
+
+Avoid overengineering user systems early.
+
+Most users are tourists using the platform once.
+
+---
+
+# Journey Model
+
+A journey represents:
+- a planned shared private transfer
+- usually created by one “host” traveler
+- optionally joined by others
+
+A journey should include:
+- route
+- date
+- approximate departure time
+- pickup area
+- dropoff area
+- passenger count
+- luggage count
+- host contact details
+- status
+
+---
+
+# Participant Model
+
+Participants join existing journeys.
+
+Participants provide:
+- name
+- email
+- WhatsApp/contact
+- passenger count
+- pickup/dropoff
+- luggage count
+
+No password/account required initially.
+
+---
+
+# Operator Model
+
+Operators/drivers:
+- browse grouped demand
+- accept journeys manually
+- coordinate externally if needed
+
+Avoid dispatch complexity.
+
+---
+
+# Email Philosophy
+
+Email is important for:
+- notifications
+- join requests
+- confirmations
+- operator coordination
+
+Passwords are NOT important initially.
+
+Prefer:
+- magic links
+- lightweight participation
+- guest flows
+
+---
+
+# MVP Scope Control
+
+Do NOT add early:
+- payments
+- chat systems
+- live tracking
+- realtime dispatch
+- advanced auth
+- automated route optimization
+- pricing algorithms
+- websocket systems
+
+Focus on:
+- browsing journeys
+- creating journeys
+- joining journeys
+- operator coordination
+
+---
+
+# Map Philosophy
+
+Maps should support the journey flow.
+
+Maps are NOT the core product.
+
+Simple use cases only:
+- pickup visualization
+- approximate route awareness
+- basic geocoding
+
+Avoid:
+- realtime tracking
+- turn-by-turn routing
+- complex map interactions
+
+---
+
+# Engineering Philosophy
+
+The hardest problem is:
+- coordination friction
+
+NOT:
+- transportation technology
+
+Keep the platform:
+- lightweight
+- understandable
+- operationally realistic
+- easy to maintain
+
+---
+
+# Code Quality Rules
+
+Prefer:
+- readable code
+- explicit naming
+- predictable structure
+- small reusable components
+
+Avoid:
+- giant components
+- deeply nested logic
+- unnecessary abstractions
+- inconsistent naming
+
+---
+
+# Styling Rules
+
+Use:
+- TailwindCSS
+- explicit text colors
+- consistent spacing
+- large touch targets
+
+Prefer:
+- rounded cards
+- simple layouts
+- clear hierarchy
+
+Avoid:
+- clutter
+- tiny text
+- weak contrast
+- overly “techy” dashboards
+
+The app should feel:
+- travel-oriented
+- lightweight
+- trustworthy
+- approachable
+
+---
+
+# Final Product Reminder
+
+This product is fundamentally:
+
+> “Share a private van and pay less.”
+
+Everything in the app should reinforce:
+- simplicity
+- coordination
+- low friction
+- premium shared travel
