@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAccountContext } from "@/lib/accountProfile";
+import { filterOutHidden, listHiddenJourneyIds } from "@/lib/operatorHiddenJourneys";
 import { createPublicServerClient } from "@/lib/supabaseServer";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapJourneyRow } from "@/lib/listPublicJourneys";
 
 export async function GET(req: NextRequest) {
@@ -25,7 +28,20 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
-    const rows = (data ?? []).map((r) => mapJourneyRow(r as Record<string, unknown>));
+    let rows = (data ?? []).map((r) => mapJourneyRow(r as Record<string, unknown>));
+
+    const auth = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await auth.auth.getUser();
+    if (user) {
+      const ctx = await getAccountContext(user.id);
+      if (ctx.operator) {
+        const hidden = new Set(await listHiddenJourneyIds(ctx.operator.id));
+        rows = filterOutHidden(rows, hidden);
+      }
+    }
+
     return NextResponse.json(rows);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";

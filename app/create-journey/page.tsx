@@ -23,6 +23,10 @@ import type {
   PreferredVehicleType,
 } from "@/types/journey";
 import { isValidGeocodePick } from "@/lib/validateGeocodePick";
+import { isPpsAirportPickup } from "@/lib/flightPpsPickup";
+import { storedFlightFieldsFromSelection } from "@/lib/flightSelection";
+import type { SelectedFlight } from "@/lib/flightTypes";
+import FlightAutocomplete from "@/components/Flight/FlightAutocomplete";
 
 const MapPicker = dynamic(() => import("@/components/Passenger/MapPicker"), { ssr: false });
 
@@ -130,6 +134,7 @@ export default function CreateJourneyPage() {
   const [pricePerSeat, setPricePerSeat] = useState(700);
   const [totalPrice, setTotalPrice] = useState(7000);
   const [totalPriceCustomized, setTotalPriceCustomized] = useState(false);
+  const [selectedFlight, setSelectedFlight] = useState<SelectedFlight | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -185,6 +190,13 @@ export default function CreateJourneyPage() {
     [hostTransportMode, preferredVehicleType, hostVehicleType],
   );
 
+  const showFlightSection =
+    routeId === "puerto-princesa-el-nido" && isPpsAirportPickup(pickupPick);
+
+  useEffect(() => {
+    if (!showFlightSection) setSelectedFlight(null);
+  }, [showFlightSection]);
+
   useEffect(() => {
     if (!totalPriceCustomized) setTotalPrice(estimatedTotal);
   }, [estimatedTotal, totalPriceCustomized]);
@@ -202,7 +214,7 @@ export default function CreateJourneyPage() {
       if (res.ok) {
         const json = (await res.json()) as { onboardingComplete?: boolean; isOperator?: boolean };
         if (json.isOperator) {
-          router.replace("/operator/dashboard");
+          router.replace("/my-journeys");
           setAuthReady(true);
           return;
         }
@@ -290,6 +302,7 @@ export default function CreateJourneyPage() {
           price_mode: priceMode,
           price_per_seat_php: priceMode === "per_seat" ? Math.round(pricePerSeat) : null,
           total_price_php: priceMode === "split_total" ? Math.round(totalPrice) : null,
+          ...(storedFlightFieldsFromSelection(selectedFlight) ?? {}),
         }),
       });
       const data = await res.json();
@@ -379,6 +392,21 @@ export default function CreateJourneyPage() {
                     }
                     routeId={routeId}
                   />
+                </div>
+              )}
+              {showFlightSection && departureDate && (
+                <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-3">
+                  <h3 className="text-sm font-bold text-gray-950">Arrival flight (optional)</h3>
+                  <p className="mt-1 text-xs text-gray-700">
+                    Helps coordinate van pickup at the airport. Skip if you are not flying in.
+                  </p>
+                  <div className="mt-3">
+                    <FlightAutocomplete
+                      date={departureDate}
+                      value={selectedFlight}
+                      onChange={setSelectedFlight}
+                    />
+                  </div>
                 </div>
               )}
             </div>

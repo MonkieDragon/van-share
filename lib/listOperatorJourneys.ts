@@ -1,12 +1,16 @@
 import { createServiceClient } from "@/lib/supabaseServer";
 import { mapJourneyRow } from "@/lib/listPublicJourneys";
+import { filterOutHidden, listHiddenJourneyIds } from "@/lib/operatorHiddenJourneys";
 import { todayYmd } from "@/lib/journeyLifecycle";
 import type { JourneyListItem } from "@/types/journey";
 
-async function listBaseOperatorJourneys(filter: {
-  van_booking_status?: "not_booked";
-  created_since?: string;
-}): Promise<JourneyListItem[]> {
+async function listBaseOperatorJourneys(
+  filter: {
+    van_booking_status?: "not_booked";
+    created_since?: string;
+  },
+  operatorId?: string,
+): Promise<JourneyListItem[]> {
   const supabase = createServiceClient();
   const today = todayYmd();
 
@@ -27,20 +31,28 @@ async function listBaseOperatorJourneys(filter: {
 
   const { data, error } = await q;
   if (error) throw error;
-  return (data ?? []).map((r) => mapJourneyRow(r as Record<string, unknown>));
+  let rows = (data ?? []).map((r) => mapJourneyRow(r as Record<string, unknown>));
+  if (operatorId) {
+    const hidden = new Set(await listHiddenJourneyIds(operatorId));
+    rows = filterOutHidden(rows, hidden);
+  }
+  return rows;
 }
 
 /** Journeys where operators can express interest (van not booked). */
-export async function listOperatorAvailableJourneys(): Promise<JourneyListItem[]> {
-  return listBaseOperatorJourneys({ van_booking_status: "not_booked" });
+export async function listOperatorAvailableJourneys(operatorId?: string): Promise<JourneyListItem[]> {
+  return listBaseOperatorJourneys({ van_booking_status: "not_booked" }, operatorId);
 }
 
 /** Recently posted journeys (same pool as available — kept for dashboard section). */
-export async function listOperatorNewJourneysThisWeek(): Promise<JourneyListItem[]> {
+export async function listOperatorNewJourneysThisWeek(operatorId?: string): Promise<JourneyListItem[]> {
   const d = new Date();
   d.setDate(d.getDate() - 7);
-  return listBaseOperatorJourneys({
-    van_booking_status: "not_booked",
-    created_since: d.toISOString(),
-  });
+  return listBaseOperatorJourneys(
+    {
+      van_booking_status: "not_booked",
+      created_since: d.toISOString(),
+    },
+    operatorId,
+  );
 }

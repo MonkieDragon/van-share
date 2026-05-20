@@ -143,8 +143,9 @@ Supabase Auth (optional initially)
 Row Level Security later
 Maps / Geocoding
 OpenStreetMap
-Nominatim
+Nominatim (geocoding)
 Leaflet
+Carto Positron basemap tiles (free CDN, no API key), with OpenStreetMap raster fallback if tiles fail
 
 Avoid expensive map APIs initially.
 

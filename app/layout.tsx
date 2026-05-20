@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import AuthNav from "@/components/Auth/AuthNav";
+import HeaderNavLinks from "@/components/Layout/HeaderNavLinks";
 import GlobalJourneySearchBar from "@/components/Layout/GlobalJourneySearchBar";
 import "./styles/globals.css";
 
@@ -34,12 +35,7 @@ export default function RootLayout({
               Van Share
             </Link>
             <nav className="flex flex-wrap items-center gap-4 text-sm font-semibold">
-              <Link href="/create-journey" className="hover:underline">
-                Post journey
-              </Link>
-              <Link href="/operator" className="hover:underline">
-                Operators
-              </Link>
+              <HeaderNavLinks />
               <AuthNav />
             </nav>
           </div>

@@ -59,7 +59,7 @@ export default function OperatorRegistrationForm() {
         setMsg(data.error ?? "Registration failed");
         return;
       }
-      router.push("/operator/dashboard");
+      router.push("/profile");
       router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Request failed");

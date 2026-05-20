@@ -53,6 +53,11 @@ export function mapJourneyRow(row: Record<string, unknown>): JourneyListItem {
     (rest.price_mode as JourneyListItem["price_mode"] | undefined) ?? "split_total";
   const price_per_seat_php = (rest.price_per_seat_php as number | null | undefined) ?? null;
   const total_price_php = (rest.total_price_php as number | null | undefined) ?? null;
+  const flight_number = (rest.flight_number as string | null | undefined) ?? null;
+  const flight_airline = (rest.flight_airline as string | null | undefined) ?? null;
+  const flight_origin_iata = (rest.flight_origin_iata as string | null | undefined) ?? null;
+  const flight_scheduled_arrival =
+    (rest.flight_scheduled_arrival as string | null | undefined) ?? null;
   const j = {
     ...rest,
     listing_status,
@@ -78,6 +83,10 @@ export function mapJourneyRow(row: Record<string, unknown>): JourneyListItem {
     price_mode,
     price_per_seat_php,
     total_price_php,
+    flight_number,
+    flight_airline,
+    flight_origin_iata,
+    flight_scheduled_arrival,
   } as JourneyListItem;
   const typical = route?.typical_van_price_php ?? 7000;
   const perPerson =

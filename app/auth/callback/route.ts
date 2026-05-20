@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     if (user) {
       const ctx = await getAccountContext(user.id);
       if (ctx.isOperator) {
-        return NextResponse.redirect(`${origin}/operator/dashboard`);
+        return NextResponse.redirect(`${origin}/my-journeys`);
       }
       if (!isPassengerOnboardingComplete(ctx.profile)) {
         const onboardNext = encodeURIComponent(safeNext);

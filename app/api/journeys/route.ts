@@ -10,6 +10,7 @@ import {
 import type { CreateJourneyBody, DbRoute, HostTransportMode, JourneyPriceMode, StopMode } from "@/types/journey";
 import { sendJourneyCreatedEmail } from "@/lib/journeyEmails";
 import { mapJourneyRow } from "@/lib/listPublicJourneys";
+import { parseStoredFlightFields } from "@/lib/flightSelection";
 import { isPassengerOnboardingComplete } from "@/lib/profileOnboarding";
 import { getAccountContext } from "@/lib/accountProfile";
 
@@ -186,6 +187,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createServiceClient();
+    const storedFlight = parseStoredFlightFields(body);
     const insertRow = {
       route_id: body.route_id.trim(),
       departure_date: body.departure_date,
@@ -227,6 +229,10 @@ export async function POST(req: NextRequest) {
       price_mode: priceMode,
       price_per_seat_php: pricePerSeat,
       total_price_php: totalPrice,
+      flight_number: storedFlight?.flight_number ?? null,
+      flight_airline: storedFlight?.flight_airline ?? null,
+      flight_origin_iata: storedFlight?.flight_origin_iata ?? null,
+      flight_scheduled_arrival: storedFlight?.flight_scheduled_arrival ?? null,
     };
 
     const { data: journey, error } = await supabase

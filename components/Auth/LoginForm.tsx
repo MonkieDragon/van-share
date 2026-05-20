@@ -30,7 +30,7 @@ export default function LoginForm() {
         ? ((await profileRes.json()) as { onboardingComplete?: boolean; isOperator?: boolean })
         : null;
       if (profileData?.isOperator) {
-        router.push("/operator/dashboard");
+        router.push("/my-journeys");
       } else if (!profileData?.onboardingComplete) {
         router.push(`/onboarding?next=${encodeURIComponent(next.startsWith("/") ? next : "/")}`);
       } else {

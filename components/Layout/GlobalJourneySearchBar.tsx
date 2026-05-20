@@ -17,6 +17,7 @@ function hideSearchBar(pathname: string) {
   if (pathname.startsWith("/onboarding")) return true;
   if (pathname === "/login" || pathname === "/signup") return true;
   if (pathname === "/create-journey") return true;
+  if (pathname.startsWith("/profile")) return true;
   if (pathname.startsWith("/messages")) return true;
   return false;
 }

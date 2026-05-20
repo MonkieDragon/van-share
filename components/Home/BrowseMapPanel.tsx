@@ -1,12 +1,14 @@
 "use client";
 
 import L from "leaflet";
-import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, Marker, Polyline, Tooltip, useMap } from "react-leaflet";
+import FallbackTileLayer from "@/components/Map/FallbackTileLayer";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useState } from "react";
 import PreferredAddressesPanel from "@/components/Home/PreferredAddressesPanel";
 import type { GeocodePick } from "@/lib/geocodeTypes";
 import { ensureLeafletDefaultIcons } from "@/lib/leafletDefaultIcons";
+import { createPinIcon } from "@/lib/mapPinIcons";
 import {
   distanceBetween,
   formatDistanceMeters,
@@ -68,7 +70,9 @@ type MapLine = {
 type MapMarker = {
   id: string;
   position: [number, number];
-  tooltip?: string;
+  pinColor: "blue" | "red";
+  label?: string;
+  distance?: string;
 };
 
 function MapModeToggle({
@@ -154,24 +158,26 @@ function BrowseMap({
       const hostFixed = pickupFixed;
       if (hostFixed) warningsOut.push("Single pickup location");
 
-      const points: [number, number][] = [];
-      if (userPoint) points.push(userPoint);
-      if (journeyPoint && !points.some((p) => sameMapPoint(p, journeyPoint))) {
-        points.push(journeyPoint);
+      const markerList: MapMarker[] = [];
+      if (userPoint) {
+        markerList.push({
+          id: "user-pickup",
+          position: userPoint,
+          pinColor: "blue",
+          label: "Your Pickup",
+        });
       }
-
-      const markerList: MapMarker[] = points.map((p, i) => ({
-        id: `m-${i}`,
-        position: p,
-        tooltip:
-          userPoint &&
-          journeyPoint &&
-          points.length === 2 &&
-          !sameMapPoint(userPoint, journeyPoint) &&
-          sameMapPoint(p, journeyPoint)
-            ? formatDistanceMeters(distanceBetween(userPoint, journeyPoint))
-            : undefined,
-      }));
+      if (journeyPoint && !markerList.some((m) => sameMapPoint(m.position, journeyPoint))) {
+        markerList.push({
+          id: "journey-pickup",
+          position: journeyPoint,
+          pinColor: hostFixed ? "red" : "blue",
+          distance:
+            userPoint && !sameMapPoint(userPoint, journeyPoint)
+              ? formatDistanceMeters(distanceBetween(userPoint, journeyPoint))
+              : undefined,
+        });
+      }
 
       const lineList: MapLine[] = [];
       if (
@@ -187,11 +193,12 @@ function BrowseMap({
         });
       }
 
-      const single = points.length === 1 ? points[0] : null;
+      const fitPts = markerList.map((m) => m.position);
+      const single = fitPts.length === 1 ? fitPts[0] : null;
       return {
         markers: markerList,
         lines: lineList,
-        fitPoints: points,
+        fitPoints: fitPts,
         center: single ?? city,
         zoom: single ? ZOOM_PRECISE : ZOOM_CITY,
         warnings: warningsOut,
@@ -205,24 +212,26 @@ function BrowseMap({
       const hostFixed = dropoffFixed;
       if (hostFixed) warningsOut.push("Single dropoff location");
 
-      const points: [number, number][] = [];
-      if (userPoint) points.push(userPoint);
-      if (journeyPoint && !points.some((p) => sameMapPoint(p, journeyPoint))) {
-        points.push(journeyPoint);
+      const markerList: MapMarker[] = [];
+      if (userPoint) {
+        markerList.push({
+          id: "user-dropoff",
+          position: userPoint,
+          pinColor: "blue",
+          label: "Your Dropoff",
+        });
       }
-
-      const markerList: MapMarker[] = points.map((p, i) => ({
-        id: `m-${i}`,
-        position: p,
-        tooltip:
-          userPoint &&
-          journeyPoint &&
-          points.length === 2 &&
-          !sameMapPoint(userPoint, journeyPoint) &&
-          sameMapPoint(p, journeyPoint)
-            ? formatDistanceMeters(distanceBetween(userPoint, journeyPoint))
-            : undefined,
-      }));
+      if (journeyPoint && !markerList.some((m) => sameMapPoint(m.position, journeyPoint))) {
+        markerList.push({
+          id: "journey-dropoff",
+          position: journeyPoint,
+          pinColor: hostFixed ? "red" : "blue",
+          distance:
+            userPoint && !sameMapPoint(userPoint, journeyPoint)
+              ? formatDistanceMeters(distanceBetween(userPoint, journeyPoint))
+              : undefined,
+        });
+      }
 
       const lineList: MapLine[] = [];
       if (
@@ -238,11 +247,12 @@ function BrowseMap({
         });
       }
 
-      const single = points.length === 1 ? points[0] : null;
+      const fitPts = markerList.map((m) => m.position);
+      const single = fitPts.length === 1 ? fitPts[0] : null;
       return {
         markers: markerList,
         lines: lineList,
-        fitPoints: points,
+        fitPoints: fitPts,
         center: single ?? city,
         zoom: single ? ZOOM_PRECISE : ZOOM_CITY,
         warnings: warningsOut,
@@ -251,30 +261,54 @@ function BrowseMap({
 
     // Route mode — show pickup & dropoff together
     const markerList: MapMarker[] = [];
-    const addMarker = (pos: [number, number], id: string, tooltip?: string) => {
-      const existing = markerList.find((m) => sameMapPoint(m.position, pos));
+    const addMarker = (marker: MapMarker) => {
+      const existing = markerList.find((m) => sameMapPoint(m.position, marker.position));
       if (existing) {
-        if (tooltip && !existing.tooltip) existing.tooltip = tooltip;
+        if (marker.label && !existing.label) existing.label = marker.label;
+        if (marker.distance && !existing.distance) existing.distance = marker.distance;
+        if (marker.pinColor === "red") existing.pinColor = "red";
         return;
       }
-      markerList.push({ id, position: pos, tooltip });
+      markerList.push(marker);
     };
 
-    if (userPickup) addMarker(userPickup, "user-pickup");
-    if (journeyPickup) {
-      const pickupTooltip =
-        userPickup && !sameMapPoint(userPickup, journeyPickup)
-          ? formatDistanceMeters(distanceBetween(userPickup, journeyPickup))
-          : undefined;
-      addMarker(journeyPickup, "journey-pickup", pickupTooltip);
+    if (userPickup) {
+      addMarker({
+        id: "user-pickup",
+        position: userPickup,
+        pinColor: "blue",
+        label: "Your Pickup",
+      });
     }
-    if (userDropoff) addMarker(userDropoff, "user-dropoff");
+    if (journeyPickup) {
+      addMarker({
+        id: "journey-pickup",
+        position: journeyPickup,
+        pinColor: pickupFixed ? "red" : "blue",
+        distance:
+          userPickup && !sameMapPoint(userPickup, journeyPickup)
+            ? formatDistanceMeters(distanceBetween(userPickup, journeyPickup))
+            : undefined,
+      });
+    }
+    if (userDropoff) {
+      addMarker({
+        id: "user-dropoff",
+        position: userDropoff,
+        pinColor: "blue",
+        label: "Your Dropoff",
+      });
+    }
     if (journeyDrop) {
-      const dropTooltip =
-        userDropoff && !sameMapPoint(userDropoff, journeyDrop)
-          ? formatDistanceMeters(distanceBetween(userDropoff, journeyDrop))
-          : undefined;
-      addMarker(journeyDrop, "journey-dropoff", dropTooltip);
+      addMarker({
+        id: "journey-dropoff",
+        position: journeyDrop,
+        pinColor: dropoffFixed ? "red" : "blue",
+        distance:
+          userDropoff && !sameMapPoint(userDropoff, journeyDrop)
+            ? formatDistanceMeters(distanceBetween(userDropoff, journeyDrop))
+            : undefined,
+      });
     }
 
     const lineList: MapLine[] = [];
@@ -361,10 +395,7 @@ function BrowseMap({
           className="absolute inset-0 z-0 h-full w-full"
           scrollWheelZoom={false}
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <FallbackTileLayer />
           {fitPoints.length > 1 ? (
             <FitPoints points={fitPoints} />
           ) : (
@@ -378,10 +409,25 @@ function BrowseMap({
             />
           ))}
           {markers.map((m) => (
-            <Marker key={m.id} position={m.position}>
-              {m.tooltip ? (
-                <Tooltip permanent direction="top" offset={[0, -12]} className="distance-callout">
-                  {m.tooltip}
+            <Marker key={m.id} position={m.position} icon={createPinIcon(m.pinColor)}>
+              {m.label ? (
+                <Tooltip
+                  permanent
+                  direction="top"
+                  offset={[0, -6]}
+                  className="map-callout map-label-callout"
+                >
+                  {m.label}
+                </Tooltip>
+              ) : null}
+              {m.distance ? (
+                <Tooltip
+                  permanent
+                  direction="top"
+                  offset={[0, m.label ? -24 : -6]}
+                  className="map-callout distance-callout"
+                >
+                  {m.distance}
                 </Tooltip>
               ) : null}
             </Marker>

@@ -166,6 +166,14 @@ export type DbJourney = {
 
   total_price_php: number | null;
 
+  flight_number: string | null;
+
+  flight_airline: string | null;
+
+  flight_origin_iata: string | null;
+
+  flight_scheduled_arrival: string | null;
+
 };
 
 
@@ -239,6 +247,14 @@ export type CreateJourneyBody = {
   price_per_seat_php?: number | null;
 
   total_price_php?: number | null;
+
+  flight_number?: string | null;
+
+  flight_airline?: string | null;
+
+  flight_origin_iata?: string | null;
+
+  flight_scheduled_arrival?: string | null;
 
 };
 

@@ -1,7 +1,8 @@
 // /app/components/Passenger/MapPicker.tsx
 "use client";
 
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
+import { MapContainer, Marker, useMap } from "react-leaflet";
+import FallbackTileLayer from "@/components/Map/FallbackTileLayer";
 import "leaflet/dist/leaflet.css";
 import { useEffect } from "react";
 import { ensureLeafletDefaultIcons } from "@/lib/leafletDefaultIcons";
@@ -60,7 +61,7 @@ export default function MapPicker({
 
   return (
     <MapContainer center={latLng} zoom={13} className="w-full h-80">
-      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      <FallbackTileLayer />
       <Marker
         position={latLng}
         draggable

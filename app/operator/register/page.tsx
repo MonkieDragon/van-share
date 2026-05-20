@@ -19,7 +19,7 @@ export default async function OperatorRegisterPage() {
 
   const ctx = await getAccountContext(user.id);
   if (ctx.isOperator) {
-    redirect("/operator/dashboard");
+    redirect("/profile");
   }
 
   return <OperatorRegistrationForm />;

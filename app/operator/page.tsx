@@ -9,12 +9,12 @@ export default async function OperatorEntryPage() {
   } = await auth.auth.getUser();
 
   if (!user) {
-    redirect("/login?next=/operator");
+    redirect("/login?next=/operator/register");
   }
 
   const ctx = await getAccountContext(user.id);
   if (ctx.isOperator) {
-    redirect("/operator/dashboard");
+    redirect("/my-journeys");
   }
 
   redirect("/operator/register");

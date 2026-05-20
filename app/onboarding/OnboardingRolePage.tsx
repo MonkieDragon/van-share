@@ -15,7 +15,7 @@ export default function OnboardingRolePage() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { onboardingComplete?: boolean; isOperator?: boolean } | null) => {
         if (data?.isOperator) {
-          router.replace("/operator/dashboard");
+          router.replace("/my-journeys");
           return;
         }
         if (data?.onboardingComplete) {

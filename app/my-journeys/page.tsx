@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import OperatorMyJourneysSections from "@/components/Operator/OperatorMyJourneysSections";
 import JourneyStatusBadges from "@/components/Journey/JourneyStatusBadges";
+import { getAccountContext } from "@/lib/accountProfile";
 import { effectiveJourneyStatus } from "@/lib/journeyLifecycle";
 import { findPassengerThreadId } from "@/lib/messaging";
 import { listMyJoinApplications } from "@/lib/listMyJoinApplications";
@@ -33,6 +35,8 @@ export default async function MyJourneysPage() {
   } = await auth.auth.getUser();
   if (!user) redirect("/login?next=/my-journeys");
 
+  const ctx = await getAccountContext(user.id);
+
   const svc = createServiceClient();
   const { data, error } = await svc
     .from("journeys")
@@ -58,19 +62,33 @@ export default async function MyJourneysPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-950">My journeys</h1>
         <p className="mt-1 text-sm text-gray-800">
-          Journeys you have posted and trips you have asked to join.
+          {ctx.isOperator
+            ? "Trips you are coordinating as an operator, plus any you have posted or joined as a passenger."
+            : "Journeys you have posted and trips you have asked to join."}
         </p>
       </div>
+
+      {ctx.isOperator && ctx.operator && (
+        <OperatorMyJourneysSections
+          operatorId={ctx.operator.id}
+          companyName={ctx.operator.company_name}
+        />
+      )}
 
       <section className="space-y-4">
         <h2 className="text-lg font-bold text-gray-950">Journeys you&apos;ve posted</h2>
         {hosted.length === 0 ? (
           <p className="rounded-lg border border-gray-200 bg-white p-6 text-gray-800">
             You have not posted a journey yet.{" "}
-            <Link href="/create-journey" className="font-semibold text-blue-700 underline">
-              Post one
-            </Link>
-            .
+            {!ctx.isOperator && (
+              <>
+                <Link href="/create-journey" className="font-semibold text-blue-700 underline">
+                  Post one
+                </Link>
+                .
+              </>
+            )}
+            {ctx.isOperator && "Passengers post journeys — browse the home page to find van jobs."}
           </p>
         ) : (
           <ul className="space-y-3">

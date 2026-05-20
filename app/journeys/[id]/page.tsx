@@ -12,11 +12,15 @@ import {
 import { effectiveJourneyStatus } from "@/lib/journeyLifecycle";
 import { seatPricePerPersonPhp, totalPriceBasisLabel } from "@/lib/journeyPricing";
 import ClaimJourneyButton from "@/components/Operator/ClaimJourneyButton";
+import HideJourneyButton from "@/components/Operator/HideJourneyButton";
 import OperatorSelectedActions from "@/components/Operator/OperatorSelectedActions";
 import { getAccountContext } from "@/lib/accountProfile";
 import { defaultVanName } from "@/lib/defaultVanName";
 import { findOperatorThreadId } from "@/lib/messaging";
+import { isJourneyHiddenForOperator } from "@/lib/operatorHiddenJourneys";
 import { getJourneyById, getJourneyDetailById } from "@/lib/listPublicJourneys";
+import { isPpsAirportJourneyPickup } from "@/lib/flightPpsPickup";
+import FlightStatusSection from "@/components/Flight/FlightStatusSection";
 import { createServiceClient } from "@/lib/supabaseServer";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DbOperatorVehicle } from "@/types/operator";
@@ -80,6 +84,20 @@ export default async function JourneyDetailPage({ params, searchParams }: Props)
   const myClaim = journey.my_operator_claim;
   const operatorId = ctx?.operator?.id ?? null;
 
+  const activeOperatorClaim =
+    myClaim &&
+    (myClaim.status === "interested" ||
+      myClaim.status === "selected" ||
+      myClaim.status === "driver_confirmed");
+
+  if (isOperator && ctx?.operator && !isOwn) {
+    const hidden = await isJourneyHiddenForOperator(ctx.operator.id, id);
+    if (hidden && !activeOperatorClaim) notFound();
+  }
+
+  const canHideJourney =
+    isOperator && !isOwn && journey.host_transport_mode === "needs_vehicle" && !activeOperatorClaim;
+
   let operatorFleet: { id: string; name: string; make: string; model: string; seat_count: number | null }[] =
     [];
   if (isOperator && ctx?.operator && !isOwn) {
@@ -99,7 +117,7 @@ export default async function JourneyDetailPage({ params, searchParams }: Props)
   }
 
   const operatorThreadId =
-    myClaim?.status === "selected" || myClaim?.contact_unlocked_at
+    myClaim && (myClaim.status === "selected" || myClaim.contact_unlocked_at)
       ? await findOperatorThreadId(myClaim.id)
       : null;
 
@@ -198,13 +216,39 @@ export default async function JourneyDetailPage({ params, searchParams }: Props)
         </div>
       </header>
 
+      {journey.flight_number && isPpsAirportJourneyPickup(journey) && (
+        <FlightStatusSection
+          flightNumber={journey.flight_number}
+          flightAirline={journey.flight_airline}
+          flightOriginIata={journey.flight_origin_iata}
+          storedScheduledArrival={journey.flight_scheduled_arrival}
+          departureDate={journey.departure_date}
+        />
+      )}
+
       {isOperator && !isOwn && journey.host_transport_mode === "needs_vehicle" && (
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-gray-950">Vehicle for this trip</h2>
           {myClaim?.status === "interested" ? (
-            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
-              Awaiting response — the host will review your offer.
-            </p>
+            <div className="mt-3 space-y-3">
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+                Awaiting response — the host will review your offer.
+              </p>
+              <ClaimJourneyButton
+                journeyId={journey.id}
+                minPassengerSeats={journey.total_passenger_count}
+                maxVanSeats={journey.max_passengers}
+                fleet={operatorFleet}
+                expressedInterest={{
+                  claimId: myClaim.id,
+                  operator_vehicle_id: myClaim.operator_vehicle_id,
+                  proposed_price_php: myClaim.proposed_price_php,
+                  vehicle_make: myClaim.vehicle_make,
+                  vehicle_model: myClaim.vehicle_model,
+                  vehicle_seat_count: myClaim.vehicle_seat_count,
+                }}
+              />
+            </div>
           ) : myClaim?.status === "selected" ? (
             <div className="mt-3 space-y-3">
               <p className="text-sm text-gray-800">The host selected your van. Message them to coordinate.</p>
@@ -221,6 +265,11 @@ export default async function JourneyDetailPage({ params, searchParams }: Props)
             </div>
           ) : (
             <p className="mt-2 text-sm text-gray-700">This journey already has transport arranged.</p>
+          )}
+          {canHideJourney && (
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <HideJourneyButton journeyId={journey.id} returnHref={returnHref} />
+            </div>
           )}
         </section>
       )}
