@@ -10,9 +10,16 @@ import {
   passengerContactFields,
 } from "@/lib/journeyContactVisibility";
 import { effectiveJourneyStatus } from "@/lib/journeyLifecycle";
+import { seatPricePerPersonPhp, totalPriceBasisLabel } from "@/lib/journeyPricing";
+import ClaimJourneyButton from "@/components/Operator/ClaimJourneyButton";
+import OperatorSelectedActions from "@/components/Operator/OperatorSelectedActions";
 import { getAccountContext } from "@/lib/accountProfile";
+import { defaultVanName } from "@/lib/defaultVanName";
+import { findOperatorThreadId } from "@/lib/messaging";
 import { getJourneyById, getJourneyDetailById } from "@/lib/listPublicJourneys";
+import { createServiceClient } from "@/lib/supabaseServer";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { DbOperatorVehicle } from "@/types/operator";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -69,8 +76,32 @@ export default async function JourneyDetailPage({ params, searchParams }: Props)
   const claim = journey.booked_claim;
   const op = claim?.operators;
   const ctx = user ? await getAccountContext(user.id) : null;
+  const isOperator = ctx?.isOperator ?? false;
   const myClaim = journey.my_operator_claim;
   const operatorId = ctx?.operator?.id ?? null;
+
+  let operatorFleet: { id: string; name: string; make: string; model: string; seat_count: number | null }[] =
+    [];
+  if (isOperator && ctx?.operator && !isOwn) {
+    const svc = createServiceClient();
+    const { data: vRows } = await svc
+      .from("operator_vehicles")
+      .select("*")
+      .eq("operator_id", ctx.operator.id)
+      .order("created_at", { ascending: true });
+    operatorFleet = ((vRows ?? []) as DbOperatorVehicle[]).map((v, i) => ({
+      id: v.id,
+      name: v.name?.trim() || defaultVanName(i),
+      make: v.make,
+      model: v.model,
+      seat_count: v.seat_count,
+    }));
+  }
+
+  const operatorThreadId =
+    myClaim?.status === "selected" || myClaim?.contact_unlocked_at
+      ? await findOperatorThreadId(myClaim.id)
+      : null;
 
   const showHostToOperator =
     myClaim &&
@@ -104,12 +135,19 @@ export default async function JourneyDetailPage({ params, searchParams }: Props)
           )}
         </div>
         <p className="mt-4 text-lg font-semibold text-gray-950">
-          Est. ₱{journey.estimated_price_per_person_php.toLocaleString("en-PH")} per person
+          ₱{seatPricePerPersonPhp(journey).toLocaleString("en-PH")} per seat
         </p>
         <p className="mt-1 text-sm text-gray-800">
-          Based on a typical ₱{(journey.route?.typical_van_price_php ?? 7000).toLocaleString("en-PH")} private van
-          split across {journey.total_passenger_count} passenger
-          {journey.total_passenger_count === 1 ? "" : "s"} right now (coordinate final fare with your group).
+          {journey.price_mode === "per_seat"
+            ? "Fixed price set by the host."
+            : totalPriceBasisLabel(journey) ??
+              `Total split across up to ${journey.max_passengers} seats.`}
+          {journey.price_mode === "split_total" && journey.total_price_php != null && (
+            <>
+              {" "}
+              Total ₱{journey.total_price_php.toLocaleString("en-PH")}.
+            </>
+          )}
         </p>
         <p className="mt-4 text-sm text-gray-800">
           <span className="font-semibold text-gray-950">Pickup:</span> {journey.pickup_location}
@@ -131,11 +169,17 @@ export default async function JourneyDetailPage({ params, searchParams }: Props)
             vanBookingStatus={journey.van_booking_status}
             passengerStatus={journey.status}
             departureDate={journey.departure_date}
+            hostTransportMode={journey.host_transport_mode}
+            hostHasOwnVehicle={journey.host_has_own_vehicle}
+            hostVehicleType={journey.host_vehicle_type}
+            hostVehicleSeatsOffered={journey.host_vehicle_seats_offered}
+            hostVehicleMake={journey.host_vehicle_make}
+            hostVehicleModel={journey.host_vehicle_model}
           />
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          {canJoin && (
+          {canJoin && !isOperator && (
             <Link
               href={`/join/${journey.id}`}
               className="inline-flex rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700"
@@ -151,16 +195,35 @@ export default async function JourneyDetailPage({ params, searchParams }: Props)
               Manage journey
             </Link>
           )}
-          {!isOwn && (
-            <Link
-              href="/create-journey"
-              className="inline-flex rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-            >
-              Start your own
-            </Link>
-          )}
         </div>
       </header>
+
+      {isOperator && !isOwn && journey.host_transport_mode === "needs_vehicle" && (
+        <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-950">Vehicle for this trip</h2>
+          {myClaim?.status === "interested" ? (
+            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+              Awaiting response — the host will review your offer.
+            </p>
+          ) : myClaim?.status === "selected" ? (
+            <div className="mt-3 space-y-3">
+              <p className="text-sm text-gray-800">The host selected your van. Message them to coordinate.</p>
+              <OperatorSelectedActions claimId={myClaim.id} threadId={operatorThreadId} />
+            </div>
+          ) : journey.van_booking_status === "not_booked" ? (
+            <div className="mt-3">
+              <ClaimJourneyButton
+                journeyId={journey.id}
+                minPassengerSeats={journey.total_passenger_count}
+                maxVanSeats={journey.max_passengers}
+                fleet={operatorFleet}
+              />
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-gray-700">This journey already has transport arranged.</p>
+          )}
+        </section>
+      )}
 
       {showHostContactForPassenger && (
         <section className="rounded-xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
@@ -169,7 +232,7 @@ export default async function JourneyDetailPage({ params, searchParams }: Props)
             const c = hostContactFields(journey);
             return (
               <p className="mt-2 text-sm text-blue-900">
-                {c.name} · {c.email} · {c.phone}
+                {c.name} · {c.email}
               </p>
             );
           })()}
@@ -183,7 +246,7 @@ export default async function JourneyDetailPage({ params, searchParams }: Props)
             const c = hostContactFields(journey);
             return (
               <p className="mt-2 text-sm text-emerald-900">
-                {c.name} · {c.email} · {c.phone}
+                {c.name} · {c.email}
               </p>
             );
           })()}
@@ -201,7 +264,7 @@ export default async function JourneyDetailPage({ params, searchParams }: Props)
                   {p.passenger_count} pax · {p.pickup_location} → {p.dropoff_location}
                 </p>
                 <p className="text-gray-700">
-                  {p.email} · {p.phone}
+                  {p.email}
                 </p>
               </li>
             ))}

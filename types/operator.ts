@@ -3,6 +3,9 @@ export type AccountType = "passenger" | "operator";
 export type DbProfile = {
   user_id: string;
   account_type: AccountType;
+  display_name: string | null;
+  nationality: string | null;
+  onboarding_completed_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -38,6 +41,11 @@ export type OperatorFleetVehicle = Pick<
 export type RegisterOperatorBody = {
   company_name: string;
   contact_name: string;
-  phone: string;
   vehicles: OperatorVehicleInput[];
+};
+
+export type UpdateProfileBody = {
+  display_name?: string;
+  nationality?: string;
+  complete_onboarding?: boolean;
 };

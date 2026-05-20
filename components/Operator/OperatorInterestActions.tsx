@@ -9,7 +9,7 @@ import type { DbJourney } from "@/types/journey";
 type Props = {
   claimId: string;
   status: DbOperatorClaim["status"];
-  journey: Pick<DbJourney, "host_name" | "host_email" | "host_phone">;
+  journey: Pick<DbJourney, "host_name" | "host_email">;
 };
 
 export default function OperatorInterestActions({ claimId, status, journey }: Props) {
@@ -83,7 +83,6 @@ export default function OperatorInterestActions({ claimId, status, journey }: Pr
         <p className="font-semibold text-emerald-950">Host contact</p>
         <p>{c.name}</p>
         <p>{c.email}</p>
-        <p>{c.phone}</p>
       </div>
     );
   }

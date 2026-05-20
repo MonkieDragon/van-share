@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabaseServer";
+import { claimJourneyWithRouteEmbed } from "@/lib/operatorClaimEmbeds";
 import { mapJourneyRow } from "@/lib/listPublicJourneys";
 import type { JourneyListItem } from "@/types/journey";
 
@@ -12,7 +13,7 @@ export async function listOperatorClaimedJourneys(operatorId: string): Promise<J
 
   const { data, error } = await supabase
     .from("operator_claims")
-    .select("journeys(*, routes(*))")
+    .select(claimJourneyWithRouteEmbed)
     .eq("operator_id", operatorId)
     .in("status", ["driver_confirmed", "selected"])
     .order("created_at", { ascending: false });

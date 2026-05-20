@@ -172,3 +172,5 @@ understandable UX
 low operational complexity
 
 Do not optimize prematurely.
+
+When you add or change SQL under `supabase/migrations/`, push to the linked remote when the work is done: `npx supabase db push --linked --yes` (after `migration list --linked` shows pending local migrations).

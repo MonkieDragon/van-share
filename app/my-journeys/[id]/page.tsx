@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import ApplicationRow from "@/components/Host/ApplicationRow";
+import JoinRequestRow from "@/components/Host/JoinRequestRow";
 import JourneyHostActions from "@/components/Host/JourneyHostActions";
 import VanBookingActions from "@/components/Host/VanBookingActions";
 import VanOfferRow from "@/components/Host/VanOfferRow";
 import JourneyStatusBadges from "@/components/Journey/JourneyStatusBadges";
-import { effectiveJourneyStatus } from "@/lib/journeyLifecycle";
+import { formatHostVehicleSummary } from "@/lib/hostVehicle";
+import { effectiveJourneyStatus, vanBookingHostLabel } from "@/lib/journeyLifecycle";
+import { findPassengerThreadId } from "@/lib/messaging";
 import { createServiceClient } from "@/lib/supabaseServer";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mapJourneyRow } from "@/lib/listPublicJourneys";
@@ -79,7 +81,21 @@ export default async function ManageJourneyPage({ params }: Props) {
           vanBookingStatus={journey.van_booking_status}
           passengerStatus={journey.status}
           departureDate={journey.departure_date}
+          hostTransportMode={journey.host_transport_mode}
+          hostHasOwnVehicle={journey.host_has_own_vehicle}
+          hostVehicleType={journey.host_vehicle_type}
+          hostVehicleSeatsOffered={journey.host_vehicle_seats_offered}
+          hostVehicleMake={journey.host_vehicle_make}
+          hostVehicleModel={journey.host_vehicle_model}
         />
+        {journey.host_has_own_vehicle && (() => {
+          const summary = formatHostVehicleSummary(journey);
+          return (
+            <p className="mt-2 text-sm text-indigo-900">
+              You listed your own vehicle{summary ? ` — ${summary}` : ""}
+            </p>
+          );
+        })()}
         <h1 className="mt-2 text-2xl font-bold text-gray-950">{journey.route?.name ?? journey.route_id}</h1>
         <p className="mt-1 text-gray-800">{journey.departure_date}</p>
         <p className="mt-2 text-sm text-gray-800">
@@ -89,6 +105,19 @@ export default async function ManageJourneyPage({ params }: Props) {
           <JourneyHostActions journeyId={id} status={journey.status} />
         </div>
       </header>
+
+      {selectedClaim && journey.van_booking_status === "awaiting_driver" && (
+        <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-950">Selected van offer</p>
+          <p className="mt-1 text-sm text-amber-900">
+            {selectedClaim.operators?.company_name} · {selectedClaim.vehicle_make}{" "}
+            {selectedClaim.vehicle_model}
+          </p>
+          <p className="mt-2 text-sm font-bold text-amber-950">
+            {vanBookingHostLabel(journey.van_booking_status)}
+          </p>
+        </section>
+      )}
 
       {journey.van_booking_status !== "booked" && (
         <section>
@@ -130,12 +159,11 @@ export default async function ManageJourneyPage({ params }: Props) {
                 dropoff_location: string;
               };
               return (
-                <ApplicationRow
+                <JoinRequestRow
                   key={r.id}
                   journeyId={id}
                   participantId={r.id}
                   applicantName={r.name}
-                  applicantEmail={r.email}
                   passengerCount={r.passenger_count}
                   pickup={r.pickup_location}
                   dropoff={r.dropoff_location}
@@ -152,15 +180,32 @@ export default async function ManageJourneyPage({ params }: Props) {
           <p className="mt-2 text-sm text-gray-700">None yet.</p>
         ) : (
           <ul className="mt-3 space-y-2 text-sm text-gray-800">
-            {(confirmed as DbJourneyParticipant[]).map((r) => (
+            {(await Promise.all(
+              (confirmed as DbJourneyParticipant[]).map(async (r) => {
+                const threadId = r.contact_unlocked_at
+                  ? await findPassengerThreadId(r.id)
+                  : null;
+                return { r, threadId };
+              }),
+            )).map(({ r, threadId }) => (
               <li key={r.id} className="rounded border border-gray-100 bg-gray-50 px-3 py-2">
                 <p className="font-semibold text-gray-950">{r.name}</p>
                 <p>
                   {r.passenger_count} pax · {r.pickup_location} → {r.dropoff_location}
                 </p>
-                <p className="text-gray-700">
-                  {r.email} · {r.phone}
-                </p>
+                {r.agreed_price_per_seat_php != null && (
+                  <p className="text-gray-800">
+                    Agreed ₱{r.agreed_price_per_seat_php.toLocaleString("en-PH")}/seat
+                  </p>
+                )}
+                {threadId && (
+                  <Link
+                    href={`/messages/${threadId}`}
+                    className="mt-2 inline-block text-sm font-semibold text-blue-700 hover:underline"
+                  >
+                    Open messages
+                  </Link>
+                )}
               </li>
             ))}
           </ul>

@@ -1,30 +1,30 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 type Props = {
   journeyId: string;
   participantId: string;
   applicantName: string;
-  applicantEmail: string;
   passengerCount: number;
   pickup: string;
   dropoff: string;
 };
 
-export default function ApplicationRow({
+export default function JoinRequestRow({
   journeyId,
   participantId,
   applicantName,
-  applicantEmail,
   passengerCount,
   pickup,
   dropoff,
 }: Props) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
-  const act = async (action: "accept" | "deny") => {
+  const act = async (action: "contact" | "deny") => {
     setLoading(true);
     setMsg("");
     try {
@@ -33,12 +33,16 @@ export default function ApplicationRow({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; threadId?: string };
       if (!res.ok) {
         setMsg(data.error ?? "Update failed");
         return;
       }
-      window.location.reload();
+      if (action === "contact" && data.threadId) {
+        router.push(`/messages/${data.threadId}`);
+        return;
+      }
+      router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Request failed");
     } finally {
@@ -49,7 +53,6 @@ export default function ApplicationRow({
   return (
     <li className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-900">
       <p className="font-semibold text-gray-950">{applicantName}</p>
-      <p className="text-gray-700">{applicantEmail}</p>
       <p className="mt-2">
         <span className="font-medium text-gray-950">Passengers:</span> {passengerCount}
       </p>
@@ -59,14 +62,15 @@ export default function ApplicationRow({
       <p className="mt-1">
         <span className="font-medium text-gray-950">Dropoff:</span> {dropoff}
       </p>
+      <p className="mt-2 text-xs text-gray-600">Contact is free during beta.</p>
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
           disabled={loading}
-          onClick={() => void act("accept")}
+          onClick={() => void act("contact")}
           className="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
         >
-          Accept
+          Contact passenger
         </button>
         <button
           type="button"

@@ -1,6 +1,6 @@
 import { createPublicServerClient, createServiceClient } from "@/lib/supabaseServer";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { estimatedPricePerPersonPhp } from "@/lib/journeyPricing";
+import { estimatedPricePerPersonPhp, seatPricePerPersonPhp } from "@/lib/journeyPricing";
 import type {
   DbJourneyParticipant,
   DbOperator,
@@ -14,6 +14,7 @@ import type {
   StopMode,
 } from "@/types/journey";
 import { effectiveJourneyStatus } from "@/lib/journeyLifecycle";
+import { journeyOperatorClaimsEmbed } from "@/lib/operatorClaimEmbeds";
 
 export function mapJourneyRow(row: Record<string, unknown>): JourneyListItem {
   const route = row.routes as DbRoute | null;
@@ -30,6 +31,28 @@ export function mapJourneyRow(row: Record<string, unknown>): JourneyListItem {
     (rest.van_booking_status as JourneyListItem["van_booking_status"] | undefined) ?? "not_booked";
   const selected_operator_claim_id =
     (rest.selected_operator_claim_id as string | null | undefined) ?? null;
+  const host_transport_mode =
+    (rest.host_transport_mode as JourneyListItem["host_transport_mode"] | undefined) ??
+    "needs_vehicle";
+  const min_vehicle_seats = (rest.min_vehicle_seats as number | null | undefined) ?? null;
+  const preferred_vehicle_type =
+    (rest.preferred_vehicle_type as JourneyListItem["preferred_vehicle_type"] | undefined) ?? null;
+  const have_pets = Boolean(rest.have_pets);
+  const allow_pets = Boolean(rest.allow_pets);
+  const cabin_bags_count = Number(rest.cabin_bags_count ?? 0);
+  const checked_bags_count = Number(rest.checked_bags_count ?? 0);
+  const oversized_luggage = Boolean(rest.oversized_luggage);
+  const host_has_own_vehicle = Boolean(rest.host_has_own_vehicle);
+  const host_vehicle_type =
+    (rest.host_vehicle_type as JourneyListItem["host_vehicle_type"] | undefined) ?? null;
+  const host_vehicle_seats_offered =
+    (rest.host_vehicle_seats_offered as number | null | undefined) ?? null;
+  const host_vehicle_make = (rest.host_vehicle_make as string | null | undefined) ?? null;
+  const host_vehicle_model = (rest.host_vehicle_model as string | null | undefined) ?? null;
+  const price_mode =
+    (rest.price_mode as JourneyListItem["price_mode"] | undefined) ?? "split_total";
+  const price_per_seat_php = (rest.price_per_seat_php as number | null | undefined) ?? null;
+  const total_price_php = (rest.total_price_php as number | null | undefined) ?? null;
   const j = {
     ...rest,
     listing_status,
@@ -39,15 +62,32 @@ export function mapJourneyRow(row: Record<string, unknown>): JourneyListItem {
     host_user_id,
     van_booking_status,
     selected_operator_claim_id,
+    host_transport_mode,
+    min_vehicle_seats,
+    preferred_vehicle_type,
+    have_pets,
+    allow_pets,
+    cabin_bags_count,
+    checked_bags_count,
+    oversized_luggage,
+    host_has_own_vehicle,
+    host_vehicle_type,
+    host_vehicle_seats_offered,
+    host_vehicle_make,
+    host_vehicle_model,
+    price_mode,
+    price_per_seat_php,
+    total_price_php,
   } as JourneyListItem;
   const typical = route?.typical_van_price_php ?? 7000;
+  const perPerson =
+    price_mode === "split_total" && price_per_seat_php == null && total_price_php == null
+      ? estimatedPricePerPersonPhp(typical, j.total_passenger_count)
+      : seatPricePerPersonPhp({ ...j, route });
   return {
     ...j,
     route,
-    estimated_price_per_person_php: estimatedPricePerPersonPhp(
-      typical,
-      j.total_passenger_count,
-    ),
+    estimated_price_per_person_php: perPerson,
   };
 }
 
@@ -86,7 +126,7 @@ export async function getJourneyDetailById(id: string): Promise<JourneyDetailIte
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("journeys")
-    .select("*, routes(*), operator_claims(*, operators(*)), operator_reviews(*)")
+    .select(`*, routes(*), ${journeyOperatorClaimsEmbed}(*, operators(*)), operator_reviews(*)`)
     .eq("id", id)
     .maybeSingle();
 

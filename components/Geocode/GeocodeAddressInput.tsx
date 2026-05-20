@@ -21,6 +21,8 @@ type Props = {
   routeId?: string | null;
   leg?: AddressLeg;
   presets?: AddressPreset[];
+  defaultPick?: GeocodePick | null;
+  showPresetButtons?: boolean;
   onPick: (pick: GeocodePick) => void;
   onClear?: () => void;
   onValidatedChange?: (valid: boolean, pick: GeocodePick | null) => void;
@@ -40,6 +42,8 @@ export default function GeocodeAddressInput({
   routeId,
   leg,
   presets = [],
+  defaultPick = null,
+  showPresetButtons = true,
   onPick,
   onClear,
   onValidatedChange,
@@ -80,6 +84,15 @@ export default function GeocodeAddressInput({
     [onPick, onValidatedChange],
   );
 
+  useEffect(() => {
+    if (!defaultPick || !isValidGeocodePick(defaultPick)) return;
+    if (validatedPick) return;
+    if (query.trim().length > 0) return;
+    setQuery(defaultPick.displayName);
+    applyValidated(defaultPick, null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only seed empty field from route default
+  }, [defaultPick?.lat, defaultPick?.lng, defaultPick?.displayName]);
+
   const handleSelect = (s: Suggestion) => {
     const pick: GeocodePick = {
       displayName: s.display_name,
@@ -112,7 +125,7 @@ export default function GeocodeAddressInput({
       <label htmlFor={listId} className="mb-0.5 block text-xs font-semibold text-gray-700">
         {label}
       </label>
-      {presets.length > 0 && (
+      {showPresetButtons && presets.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
           {presets.map((preset) => {
             const selected = selectedPresetId === preset.id;
@@ -160,7 +173,7 @@ export default function GeocodeAddressInput({
       />
       {showInvalid && (
         <p id={`${listId}-err`} className="mt-1 text-xs text-red-700">
-          Choose a suggestion from the list or a preset so we can place it on the map.
+          Choose a suggestion from the list so we can place it on the map.
         </p>
       )}
       {open && awaitingSelection && (

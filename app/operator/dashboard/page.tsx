@@ -1,13 +1,16 @@
+import type { ReactNode } from "react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import ClaimJourneyButton from "@/components/Operator/ClaimJourneyButton";
+import ClaimJourneyButton, { type ExpressedInterest } from "@/components/Operator/ClaimJourneyButton";
 import OperatorFleetSection from "@/components/Operator/OperatorFleetSection";
-import OperatorInterestActions from "@/components/Operator/OperatorInterestActions";
+import OperatorSelectedActions from "@/components/Operator/OperatorSelectedActions";
 import SendReviewInvitesButton from "@/components/Operator/SendReviewInvitesButton";
-import JourneyStatusBadges from "@/components/Journey/JourneyStatusBadges";
+import JourneyCard from "@/components/Journey/JourneyCard";
 import { getAccountContext } from "@/lib/accountProfile";
 import { defaultVanName } from "@/lib/defaultVanName";
+import { findOperatorThreadId } from "@/lib/messaging";
 import { listOperatorClaimedJourneys } from "@/lib/listOperatorClaimedJourneys";
-import { listOperatorInterests, operatorInterestStatusLabel } from "@/lib/listOperatorInterests";
+import { listOperatorInterests, type OperatorInterestRow } from "@/lib/listOperatorInterests";
 import { listOperatorAvailableJourneys } from "@/lib/listOperatorJourneys";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabaseServer";
@@ -18,40 +21,34 @@ export const metadata = {
   title: "Operator dashboard | Van Share",
 };
 
-function OpenJourneyCard({
+function toExpressedInterest(row: OperatorInterestRow): ExpressedInterest {
+  return {
+    claimId: row.id,
+    operator_vehicle_id: row.operator_vehicle_id,
+    proposed_price_php: row.proposed_price_php,
+    vehicle_make: row.vehicle_make,
+    vehicle_model: row.vehicle_model,
+    vehicle_seat_count: row.vehicle_seat_count,
+  };
+}
+
+function OperatorJourneyListItem({
   journey,
-  fleet,
+  children,
+  label,
 }: {
   journey: JourneyListItem;
-  fleet: OperatorFleetVehicle[];
+  children?: ReactNode;
+  label?: string;
 }) {
-  const routeName = journey.route?.name ?? journey.route_id;
+  const detailQuery = `return=${encodeURIComponent("/operator/dashboard")}`;
   return (
-    <li className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-        <div>
-          <JourneyStatusBadges
-            vanBookingStatus={journey.van_booking_status}
-            passengerStatus={journey.status}
-            departureDate={journey.departure_date}
-          />
-          <p className="mt-2 text-sm font-medium text-gray-700">{journey.departure_date}</p>
-          <h3 className="text-lg font-bold text-gray-950">{routeName}</h3>
-          <p className="mt-1 text-sm text-gray-800">
-            {journey.total_passenger_count} / {journey.max_passengers} pax · Pickup:{" "}
-            {journey.pickup_location}
-          </p>
-          <p className="text-sm text-gray-800">Host: {journey.host_name}</p>
-        </div>
-        <div className="shrink-0 border-t border-gray-100 pt-3 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
-          <ClaimJourneyButton
-            journeyId={journey.id}
-            minPassengerSeats={journey.total_passenger_count}
-            maxVanSeats={journey.max_passengers}
-            fleet={fleet}
-          />
-        </div>
-      </div>
+    <li className="space-y-3">
+      {label && (
+        <p className="text-sm font-semibold text-amber-950">{label}</p>
+      )}
+      <JourneyCard journey={journey} detailQuery={detailQuery} />
+      {children && <div className="pl-1">{children}</div>}
     </li>
   );
 }
@@ -70,7 +67,7 @@ export default async function OperatorDashboardPage() {
 
   const operatorId = ctx.operator.id;
   let available: JourneyListItem[] = [];
-  let interests: Awaited<ReturnType<typeof listOperatorInterests>> = [];
+  let interests: OperatorInterestRow[] = [];
   let booked: Awaited<ReturnType<typeof listOperatorClaimedJourneys>> = [];
   let vehicles: DbOperatorVehicle[] = [];
   let error: string | null = null;
@@ -91,7 +88,15 @@ export default async function OperatorDashboardPage() {
       name: v.name?.trim() || defaultVanName(i),
     }));
   } catch (e) {
-    error = e instanceof Error ? e.message : "Could not load operator data";
+    error =
+      e instanceof Error
+        ? e.message
+        : typeof e === "object" &&
+            e !== null &&
+            "message" in e &&
+            typeof (e as { message: unknown }).message === "string"
+          ? (e as { message: string }).message
+          : "Could not load operator data";
   }
 
   const fleet: OperatorFleetVehicle[] = vehicles.map((v) => ({
@@ -102,12 +107,36 @@ export default async function OperatorDashboardPage() {
     seat_count: v.seat_count,
   }));
 
+  const availableIdSet = new Set(available.map((j) => j.id));
+  const openInterests = interests.filter(
+    (i) => i.status === "interested" && availableIdSet.has(i.journey.id),
+  );
+  const expressedElsewhere = interests.filter(
+    (i) => i.status === "interested" && !availableIdSet.has(i.journey.id),
+  );
+  const selectedInterests = interests.filter((i) => i.status === "selected");
+
+  const openWithoutInterest = available.filter(
+    (j) => !interests.some((i) => i.journey.id === j.id && i.status === "interested"),
+  );
+
+  const selectedWithThreads = await Promise.all(
+    selectedInterests.map(async (row) => ({
+      row,
+      threadId: await findOperatorThreadId(row.id),
+    })),
+  );
+
   return (
     <div className="space-y-8 text-gray-900">
       <div>
         <h1 className="text-2xl font-bold text-gray-950">Operator dashboard</h1>
         <p className="mt-1 max-w-2xl text-sm text-gray-800">
-          {ctx.operator.company_name} · Express interest on journeys that still need a van.
+          {ctx.operator.company_name} · Browse open jobs on the{" "}
+          <Link href="/" className="font-semibold text-blue-700 underline">
+            home page
+          </Link>{" "}
+          or express interest below.
         </p>
       </div>
 
@@ -131,50 +160,64 @@ export default async function OperatorDashboardPage() {
               </p>
             ) : (
               <ul className="space-y-4">
-                {available.map((j) => (
-                  <OpenJourneyCard key={j.id} journey={j} fleet={fleet} />
+                {openWithoutInterest.map((j) => (
+                  <OperatorJourneyListItem key={j.id} journey={j}>
+                    <ClaimJourneyButton
+                      journeyId={j.id}
+                      minPassengerSeats={j.total_passenger_count}
+                      maxVanSeats={j.max_passengers}
+                      fleet={fleet}
+                    />
+                  </OperatorJourneyListItem>
+                ))}
+                {openInterests.map((row) => (
+                  <OperatorJourneyListItem
+                    key={row.id}
+                    journey={row.journey}
+                    label="Awaiting response"
+                  >
+                    <ClaimJourneyButton
+                      journeyId={row.journey.id}
+                      minPassengerSeats={row.journey.total_passenger_count}
+                      maxVanSeats={row.journey.max_passengers}
+                      fleet={fleet}
+                      disabled
+                      expressedInterest={toExpressedInterest(row)}
+                    />
+                  </OperatorJourneyListItem>
                 ))}
               </ul>
             )}
           </section>
 
-          <section className="space-y-4">
-            <h2 className="text-lg font-bold text-gray-950">My interests</h2>
-            {interests.length === 0 ? (
-              <p className="rounded-lg border border-gray-200 bg-white p-6 text-gray-800">
-                You have not expressed interest in any journeys yet.
-              </p>
-            ) : (
-              <ul className="space-y-3">
-                {interests.map((row) => {
-                  const routeName = row.journey.route?.name ?? row.journey.route_id;
-                  return (
-                    <li
-                      key={row.id}
-                      className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
-                    >
-                      <p className="text-sm font-medium text-gray-700">{row.journey.departure_date}</p>
-                      <p className="font-semibold text-gray-950">{routeName}</p>
-                      <p className="mt-1 text-sm font-semibold text-gray-800">
-                        {operatorInterestStatusLabel(row.status)}
-                      </p>
-                      <div className="mt-3">
-                        <OperatorInterestActions
-                          claimId={row.id}
-                          status={row.status}
-                          journey={{
-                            host_name: row.journey.host_name,
-                            host_email: row.journey.host_email,
-                            host_phone: row.journey.host_phone,
-                          }}
-                        />
-                      </div>
-                    </li>
-                  );
-                })}
+          {expressedElsewhere.length > 0 && (
+            <section className="space-y-4">
+              <h2 className="text-lg font-bold text-gray-950">Expressed interest</h2>
+              <p className="text-sm text-gray-800">Awaiting host response on these trips.</p>
+              <ul className="space-y-4">
+                {expressedElsewhere.map((row) => (
+                  <OperatorJourneyListItem
+                    key={row.id}
+                    journey={row.journey}
+                    label="Awaiting response"
+                  />
+                ))}
               </ul>
-            )}
-          </section>
+            </section>
+          )}
+
+          {selectedWithThreads.length > 0 && (
+            <section className="space-y-4">
+              <h2 className="text-lg font-bold text-gray-950">Accepted offer — awaiting your message</h2>
+              <ul className="space-y-4">
+                {selectedWithThreads.map(({ row, threadId }) => (
+                  <OperatorJourneyListItem key={row.id} journey={row.journey}>
+                    <OperatorSelectedActions claimId={row.id} threadId={threadId} />
+                  </OperatorJourneyListItem>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {booked.length > 0 && (
             <section className="space-y-3">

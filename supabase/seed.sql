@@ -1,3 +1,709 @@
--- Optional dev seed. Route + demo operator rows are inserted by migration 001.
--- Add sample journeys here only for local `supabase db reset` workflows.
-SELECT 1;
+-- Dev/demo seed: sample journeys across passenger, van-booking, and operator-interest states.
+-- Uses relative dates so listings stay in the near-future search window.
+-- Safe to re-run: clears prior journey graph (participants, claims, reviews, journeys).
+
+BEGIN;
+
+DELETE FROM messages;
+DELETE FROM message_threads;
+DELETE FROM operator_reviews;
+DELETE FROM journey_participants;
+DELETE FROM operator_claims;
+DELETE FROM journeys;
+
+-- Operators (upsert; keeps any auth-linked operator rows you already have)
+INSERT INTO operators (id, company_name, contact_name, email, verified, moderation_status)
+VALUES
+  (
+    '00000000-0000-4000-8000-000000000001',
+    'Demo Van Co',
+    'Ana Reyes',
+    'demo-operator@example.com',
+    true,
+    'active'
+  ),
+  (
+    '00000000-0000-4000-8001-000000000002',
+    'Palawan Express Vans',
+    'Marco Santos',
+    'marco@palawan-express.example',
+    true,
+    'active'
+  ),
+  (
+    '00000000-0000-4000-8001-000000000003',
+    'Island Hopper Transport',
+    'Liza Cruz',
+    'liza@island-hopper.example',
+    false,
+    'active'
+  )
+ON CONFLICT (id) DO UPDATE SET
+  company_name = EXCLUDED.company_name,
+  contact_name = EXCLUDED.contact_name,
+  email = EXCLUDED.email,
+  verified = EXCLUDED.verified,
+  moderation_status = EXCLUDED.moderation_status;
+
+DELETE FROM operator_vehicles
+WHERE operator_id IN (
+  '00000000-0000-4000-8000-000000000001',
+  '00000000-0000-4000-8001-000000000002',
+  '00000000-0000-4000-8001-000000000003'
+);
+
+INSERT INTO operator_vehicles (id, operator_id, name, make, model, year, license_plate, seat_count, image_urls)
+VALUES
+  (
+    '00000000-0000-4000-8002-000000000001',
+    '00000000-0000-4000-8000-000000000001',
+    'Van 1',
+    'Toyota',
+    'Hiace',
+    2022,
+    'DEMO-001',
+    12,
+    ARRAY['https://placehold.co/800x500/png?text=Demo+Van+1']
+  ),
+  (
+    '00000000-0000-4000-8002-000000000002',
+    '00000000-0000-4000-8001-000000000002',
+    'Van 1',
+    'Ford',
+    'Transit',
+    2021,
+    'PAL-1001',
+    14,
+    ARRAY['https://placehold.co/800x500/png?text=Palawan+Van']
+  ),
+  (
+    '00000000-0000-4000-8002-000000000003',
+    '00000000-0000-4000-8001-000000000003',
+    'Van 1',
+    'Nissan',
+    'Urvan',
+    2020,
+    'ISL-2001',
+    12,
+    ARRAY['https://placehold.co/800x500/png?text=Island+Van']
+  );
+
+-- Journeys (selected_operator_claim_id set after claims)
+INSERT INTO journeys (
+  id,
+  route_id,
+  departure_date,
+  time_window_start,
+  time_window_end,
+  host_name,
+  host_email,
+  host_transport_mode,
+  min_vehicle_seats,
+  have_pets,
+  allow_pets,
+  cabin_bags_count,
+  checked_bags_count,
+  oversized_luggage,
+  pickup_location,
+  pickup_lat,
+  pickup_lng,
+  dropoff_location,
+  dropoff_lat,
+  dropoff_lng,
+  host_passenger_count,
+  luggage_count,
+  max_passengers,
+  total_passenger_count,
+  status,
+  van_booking_status,
+  listing_status,
+  stop_mode,
+  pickup_stop_mode,
+  dropoff_stop_mode,
+  operator_ready,
+  host_has_own_vehicle,
+  host_vehicle_type,
+  host_vehicle_seats_offered,
+  host_vehicle_make,
+  host_vehicle_model,
+  notes
+)
+VALUES
+  -- Tomorrow PP→EN: open, no van, seats available (browse + join)
+  (
+    'a0000001-0001-4000-8000-000000000001',
+    'puerto-princesa-el-nido',
+    CURRENT_DATE + 1,
+    '07:00',
+    '09:00',
+    'Sam Taylor',
+    'sam.taylor@example.com',
+    'needs_vehicle',
+    10,
+    false,
+    true,
+    1,
+    1,
+    false,
+    'Puerto Princesa Airport (PPS)',
+    9.7421,
+    118.7587,
+    'El Nido town center',
+    11.1790,
+    119.3892,
+    2,
+    2,
+    10,
+    2,
+    'open',
+    'not_booked',
+    'submitted',
+    'fixed',
+    'fixed',
+    'fixed',
+    true,
+    false,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    'Looking for 2–3 more travelers to share a private van.'
+  ),
+  -- Tomorrow EN→PP: open with operator interest (2 claims)
+  (
+    'a0000001-0001-4000-8000-000000000002',
+    'el-nido-puerto-princesa',
+    CURRENT_DATE + 1,
+    '08:30',
+    '10:30',
+    'Jamie Lee',
+    'jamie.lee@example.com',
+    'needs_vehicle',
+    10,
+    false,
+    false,
+    0,
+    1,
+    false,
+    'Lio Beach area, El Nido',
+    11.2000,
+    119.4000,
+    'Puerto Princesa city center',
+    9.7392,
+    118.7353,
+    3,
+    1,
+    10,
+    3,
+    'open',
+    'not_booked',
+    'submitted',
+    'flexible',
+    'flexible',
+    'fixed',
+    true,
+    false,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    'Flexible pickup along the main road in El Nido.'
+  ),
+  -- Day +2 PP→EN: host selected a driver, awaiting confirmation
+  (
+    'a0000001-0001-4000-8000-000000000003',
+    'puerto-princesa-el-nido',
+    CURRENT_DATE + 2,
+    '06:00',
+    '08:00',
+    'Alex Morgan',
+    'alex.morgan@example.com',
+    'needs_vehicle',
+    10,
+    false,
+    false,
+    2,
+    1,
+    false,
+    'Robinsons Place Puerto Princesa',
+    9.7500,
+    118.7400,
+    'Corong-Corong, El Nido',
+    11.1700,
+    119.4100,
+    4,
+    3,
+    10,
+    4,
+    'open',
+    'awaiting_driver',
+    'submitted',
+    'fixed',
+    'fixed',
+    'fixed',
+    true,
+    false,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+  ),
+  -- Day +2 EN→PP: van booked, driver confirmed, almost full
+  (
+    'a0000001-0001-4000-8000-000000000004',
+    'el-nido-puerto-princesa',
+    CURRENT_DATE + 2,
+    '14:00',
+    '16:00',
+    'Chris Park',
+    'chris.park@example.com',
+    'vehicle_booked',
+    NULL,
+    false,
+    false,
+    1,
+    1,
+    false,
+    'El Nido Bus Terminal',
+    11.1780,
+    119.3950,
+    'Puerto Princesa Airport (PPS)',
+    9.7421,
+    118.7587,
+    2,
+    2,
+    8,
+    7,
+    'open',
+    'booked',
+    'submitted',
+    'fixed',
+    'fixed',
+    'fixed',
+    true,
+    false,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    'Van confirmed — join for remaining seat.'
+  ),
+  -- Day +3 PP→EN: host bringing own van (booked, no operator flow)
+  (
+    'a0000001-0001-4000-8000-000000000005',
+    'puerto-princesa-el-nido',
+    CURRENT_DATE + 3,
+    '09:00',
+    NULL,
+    'Morgan Reid',
+    'morgan.reid@example.com',
+    'own_vehicle',
+    NULL,
+    false,
+    false,
+    0,
+    0,
+    false,
+    'Puerto Princesa Port area',
+    9.7350,
+    118.7300,
+    'Nacpan Beach area',
+    11.2200,
+    119.4500,
+    3,
+    0,
+    8,
+    3,
+    'open',
+    'booked',
+    'submitted',
+    'fixed',
+    'fixed',
+    'flexible',
+    true,
+    true,
+    'van',
+    8,
+    'Toyota',
+    'Grandia',
+    'We already have a van — room for 5 more passengers.'
+  ),
+  -- Day +3 EN→PP: join requests (pending + confirmed)
+  (
+    'a0000001-0001-4000-8000-000000000006',
+    'el-nido-puerto-princesa',
+    CURRENT_DATE + 3,
+    '11:00',
+    '13:00',
+    'Taylor Kim',
+    'taylor.kim@example.com',
+    'needs_vehicle',
+    10,
+    true,
+    true,
+    1,
+    0,
+    false,
+    'Cadlao Resort area',
+    11.1900,
+    119.4200,
+    'SM City Puerto Princesa',
+    9.7600,
+    118.7500,
+    2,
+    1,
+    10,
+    5,
+    'open',
+    'not_booked',
+    'submitted',
+    'fixed',
+    'fixed',
+    'fixed',
+    true,
+    false,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+  ),
+  -- Day +4 PP→EN: full (no join capacity)
+  (
+    'a0000001-0001-4000-8000-000000000007',
+    'puerto-princesa-el-nido',
+    CURRENT_DATE + 4,
+    '05:30',
+    '07:30',
+    'Jordan Blake',
+    'jordan.blake@example.com',
+    'needs_vehicle',
+    8,
+    false,
+    false,
+    2,
+    2,
+    false,
+    'Puerto Princesa Airport (PPS)',
+    9.7421,
+    118.7587,
+    'El Nido town center',
+    11.1790,
+    119.3892,
+    4,
+    4,
+    8,
+    8,
+    'full',
+    'not_booked',
+    'submitted',
+    'fixed',
+    'fixed',
+    'fixed',
+    true,
+    false,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    'Group is full but still seeking a van operator.'
+  ),
+  -- Day +5 EN→PP: cancelled (detail-page only; hidden from browse)
+  (
+    'a0000001-0001-4000-8000-000000000008',
+    'el-nido-puerto-princesa',
+    CURRENT_DATE + 5,
+    '10:00',
+    NULL,
+    'Casey Nguyen',
+    'casey.nguyen@example.com',
+    'needs_vehicle',
+    10,
+    false,
+    false,
+    0,
+    0,
+    false,
+    'El Nido town center',
+    11.1790,
+    119.3892,
+    'Puerto Princesa city center',
+    9.7392,
+    118.7353,
+    2,
+    0,
+    10,
+    2,
+    'cancelled',
+    'not_booked',
+    'submitted',
+    'fixed',
+    'fixed',
+    'fixed',
+    false,
+    false,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    'Cancelled — plans changed.'
+  ),
+  -- Yesterday: expired (detail-page / badge testing)
+  (
+    'a0000001-0001-4000-8000-000000000009',
+    'puerto-princesa-el-nido',
+    CURRENT_DATE - 1,
+    '08:00',
+    NULL,
+    'Riley Fox',
+    'riley.fox@example.com',
+    'needs_vehicle',
+    10,
+    false,
+    false,
+    1,
+    0,
+    false,
+    'Puerto Princesa Airport (PPS)',
+    9.7421,
+    118.7587,
+    'El Nido town center',
+    11.1790,
+    119.3892,
+    2,
+    1,
+    10,
+    2,
+    'expired',
+    'not_booked',
+    'submitted',
+    'fixed',
+    'fixed',
+    'fixed',
+    false,
+    false,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+  );
+
+INSERT INTO operator_claims (
+  id,
+  operator_id,
+  journey_id,
+  operator_vehicle_id,
+  proposed_price_php,
+  status,
+  vehicle_make,
+  vehicle_model,
+  vehicle_seat_count,
+  vehicle_image_urls,
+  contact_unlocked_at
+)
+VALUES
+  (
+    'b0000001-0001-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000001',
+    'a0000001-0001-4000-8000-000000000002',
+    '00000000-0000-4000-8002-000000000001',
+    6800,
+    'interested',
+    'Toyota',
+    'Hiace',
+    12,
+    ARRAY['https://placehold.co/800x500/png?text=Demo+Van+1'],
+    NULL
+  ),
+  (
+    'b0000001-0001-4000-8000-000000000002',
+    '00000000-0000-4000-8001-000000000002',
+    'a0000001-0001-4000-8000-000000000002',
+    '00000000-0000-4000-8002-000000000002',
+    6500,
+    'interested',
+    'Ford',
+    'Transit',
+    14,
+    ARRAY['https://placehold.co/800x500/png?text=Palawan+Van'],
+    NULL
+  ),
+  (
+    'b0000001-0001-4000-8000-000000000003',
+    '00000000-0000-4000-8001-000000000002',
+    'a0000001-0001-4000-8000-000000000003',
+    '00000000-0000-4000-8002-000000000002',
+    7000,
+    'selected',
+    'Ford',
+    'Transit',
+    14,
+    ARRAY['https://placehold.co/800x500/png?text=Palawan+Van'],
+    NULL
+  ),
+  (
+    'b0000001-0001-4000-8000-000000000004',
+    '00000000-0000-4000-8000-000000000001',
+    'a0000001-0001-4000-8000-000000000003',
+    '00000000-0000-4000-8002-000000000001',
+    6900,
+    'not_selected',
+    'Toyota',
+    'Hiace',
+    12,
+    ARRAY['https://placehold.co/800x500/png?text=Demo+Van+1'],
+    NULL
+  ),
+  (
+    'b0000001-0001-4000-8000-000000000005',
+    '00000000-0000-4000-8001-000000000003',
+    'a0000001-0001-4000-8000-000000000004',
+    '00000000-0000-4000-8002-000000000003',
+    7200,
+    'driver_confirmed',
+    'Nissan',
+    'Urvan',
+    12,
+    ARRAY['https://placehold.co/800x500/png?text=Island+Van'],
+    now() - interval '2 hours'
+  );
+
+UPDATE journeys
+SET selected_operator_claim_id = 'b0000001-0001-4000-8000-000000000003'
+WHERE id = 'a0000001-0001-4000-8000-000000000003';
+
+UPDATE journeys
+SET selected_operator_claim_id = 'b0000001-0001-4000-8000-000000000005'
+WHERE id = 'a0000001-0001-4000-8000-000000000004';
+
+INSERT INTO journey_participants (
+  id,
+  journey_id,
+  name,
+  email,
+  pickup_location,
+  dropoff_location,
+  passenger_count,
+  luggage_count,
+  status,
+  contact_unlocked_at,
+  agreed_price_per_seat_php
+)
+VALUES
+  (
+    'c0000001-0001-4000-8000-000000000001',
+    'a0000001-0001-4000-8000-000000000006',
+    'Pat Joiner',
+    'pat.joiner@example.com',
+    'El Nido town center',
+    'Puerto Princesa Airport (PPS)',
+    3,
+    2,
+    'confirmed',
+    now() - interval '1 hour',
+    1200
+  ),
+  (
+    'c0000001-0001-4000-8000-000000000002',
+    'a0000001-0001-4000-8000-000000000006',
+    'Quinn Applicant',
+    'quinn.applicant@example.com',
+    'Lio Beach area',
+    'SM City Puerto Princesa',
+    2,
+    0,
+    'pending'
+  ),
+  (
+    'c0000001-0001-4000-8000-000000000003',
+    'a0000001-0001-4000-8000-000000000004',
+    'Dana Rider',
+    'dana.rider@example.com',
+    'El Nido Bus Terminal',
+    'Puerto Princesa Airport (PPS)',
+    5,
+    3,
+    'confirmed',
+    now() - interval '3 hours',
+    900
+  );
+
+-- Demo messaging (placeholder auth user ids — replace with real user_id values when testing in-app)
+INSERT INTO message_threads (
+  id,
+  journey_id,
+  kind,
+  host_user_id,
+  counterparty_user_id,
+  participant_id,
+  operator_claim_id,
+  contact_unlocked_at
+)
+VALUES
+  (
+    'e0000001-0001-4000-8000-000000000001',
+    'a0000001-0001-4000-8000-000000000006',
+    'passenger',
+    '00000000-0000-4000-8000-00000000aa',
+    '00000000-0000-4000-8000-00000000bb',
+    'c0000001-0001-4000-8000-000000000001',
+    NULL,
+    now() - interval '1 hour'
+  ),
+  (
+    'e0000001-0001-4000-8000-000000000002',
+    'a0000001-0001-4000-8000-000000000003',
+    'operator',
+    '00000000-0000-4000-8000-00000000cc',
+    '00000000-0000-4000-8000-00000000dd',
+    NULL,
+    'b0000001-0001-4000-8000-000000000003',
+    now() - interval '30 minutes'
+  );
+
+INSERT INTO messages (id, thread_id, sender_user_id, body, created_at)
+VALUES
+  (
+    'f0000001-0001-4000-8000-000000000001',
+    'e0000001-0001-4000-8000-000000000001',
+    '00000000-0000-4000-8000-00000000aa',
+    'Hi Pat — pickup around 9am at El Nido town center works for us.',
+    now() - interval '50 minutes'
+  ),
+  (
+    'f0000001-0001-4000-8000-000000000002',
+    'e0000001-0001-4000-8000-000000000001',
+    '00000000-0000-4000-8000-00000000bb',
+    'Perfect, see you then!',
+    now() - interval '45 minutes'
+  ),
+  (
+    'f0000001-0001-4000-8000-000000000003',
+    'e0000001-0001-4000-8000-000000000002',
+    '00000000-0000-4000-8000-00000000dd',
+    'Thanks for selecting our van — we can depart after breakfast.',
+    now() - interval '20 minutes'
+  );
+
+INSERT INTO operator_reviews (
+  id,
+  operator_id,
+  journey_id,
+  participant_id,
+  rating,
+  review_text,
+  moderation_status
+)
+VALUES (
+  'd0000001-0001-4000-8000-000000000001',
+  '00000000-0000-4000-8001-000000000003',
+  'a0000001-0001-4000-8000-000000000004',
+  'c0000001-0001-4000-8000-000000000003',
+  9,
+  'Smooth ride, on time, comfortable van.',
+  'visible'
+);
+
+COMMIT;

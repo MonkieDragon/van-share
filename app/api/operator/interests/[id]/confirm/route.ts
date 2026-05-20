@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOperatorForUser } from "@/lib/accountProfile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { claimJourneyEmbed } from "@/lib/operatorClaimEmbeds";
 import { createServiceClient } from "@/lib/supabaseServer";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -26,7 +27,7 @@ export async function PATCH(_req: NextRequest, context: Ctx) {
     const svc = createServiceClient();
     const { data: claim, error: cErr } = await svc
       .from("operator_claims")
-      .select("*, journeys(*)")
+      .select(`*, ${claimJourneyEmbed}(*)`)
       .eq("id", id)
       .eq("operator_id", operator.id)
       .single();

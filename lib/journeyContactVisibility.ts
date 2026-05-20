@@ -8,7 +8,7 @@ import type {
 type ViewerRole = "host" | "operator" | "passenger" | "public";
 
 export function canViewHostContact(
-  journey: Pick<DbJourney, "host_email" | "host_phone">,
+  _journey: Pick<DbJourney, "host_email">,
   claim: Pick<DbOperatorClaim, "status" | "operator_id"> | null,
   viewer: { role: ViewerRole; operatorId?: string | null },
 ): boolean {
@@ -41,14 +41,13 @@ export function canViewPassengerContact(
   return false;
 }
 
-export function hostContactFields(journey: Pick<DbJourney, "host_name" | "host_email" | "host_phone">) {
+export function hostContactFields(journey: Pick<DbJourney, "host_name" | "host_email">) {
   return {
     name: journey.host_name,
     email: journey.host_email,
-    phone: journey.host_phone,
   };
 }
 
-export function passengerContactFields(p: Pick<DbJourneyParticipant, "name" | "email" | "phone">) {
-  return { name: p.name, email: p.email, phone: p.phone };
+export function passengerContactFields(p: Pick<DbJourneyParticipant, "name" | "email">) {
+  return { name: p.name, email: p.email };
 }

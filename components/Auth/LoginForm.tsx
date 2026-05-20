@@ -25,7 +25,17 @@ export default function LoginForm() {
         setMsg(error.message);
         return;
       }
-      router.push(next.startsWith("/") ? next : "/");
+      const profileRes = await fetch("/api/profile");
+      const profileData = profileRes.ok
+        ? ((await profileRes.json()) as { onboardingComplete?: boolean; isOperator?: boolean })
+        : null;
+      if (profileData?.isOperator) {
+        router.push("/operator/dashboard");
+      } else if (!profileData?.onboardingComplete) {
+        router.push(`/onboarding?next=${encodeURIComponent(next.startsWith("/") ? next : "/")}`);
+      } else {
+        router.push(next.startsWith("/") ? next : "/");
+      }
       router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Sign in failed");

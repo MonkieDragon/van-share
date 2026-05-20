@@ -4,6 +4,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DbRoute, JoinJourneyBody } from "@/types/journey";
 import { isJourneyHostedByUser } from "@/lib/journeyHost";
 import { sendJoinApplicationPendingToHost } from "@/lib/journeyEmails";
+import { getAccountContext } from "@/lib/accountProfile";
+import { isPassengerOnboardingComplete } from "@/lib/profileOnboarding";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -23,11 +25,20 @@ export async function POST(req: NextRequest, context: Ctx) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await req.json()) as JoinJourneyBody;
-    if (!body.name?.trim() || !body.phone?.trim()) {
-      return NextResponse.json({ error: "Name and phone are required" }, { status: 400 });
+    const ctx = await getAccountContext(user.id);
+    if (!isPassengerOnboardingComplete(ctx.profile)) {
+      return NextResponse.json(
+        { error: "Complete your profile — display name and nationality required" },
+        { status: 400 },
+      );
     }
-    const email = (user.email ?? body.email)?.trim();
+    const displayName = ctx.profile.display_name?.trim();
+    if (!displayName) {
+      return NextResponse.json({ error: "Complete your profile — display name required" }, { status: 400 });
+    }
+
+    const body = (await req.json()) as JoinJourneyBody;
+    const email = (user.email ?? "").trim();
     if (!email) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
@@ -103,9 +114,8 @@ export async function POST(req: NextRequest, context: Ctx) {
 
     const { error: pErr } = await supabase.from("journey_participants").insert({
       journey_id: journeyId,
-      name: body.name.trim(),
+      name: displayName,
       email,
-      phone: body.phone.trim(),
       pickup_location: pickup,
       dropoff_location: dropoff,
       passenger_count: pax,
@@ -120,7 +130,7 @@ export async function POST(req: NextRequest, context: Ctx) {
     await sendJoinApplicationPendingToHost(
       journey as never,
       route,
-      body.name.trim(),
+      displayName,
       email,
       pax,
     );

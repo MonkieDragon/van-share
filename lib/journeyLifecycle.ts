@@ -26,9 +26,16 @@ export function vanBookingBadgeLabel(vanBookingStatus: VanBookingStatus): "BOOKE
   return vanBookingStatus === "booked" ? "BOOKED" : "NOT BOOKED";
 }
 
+/** Host-facing label for van booking state on manage pages. */
+export function vanBookingHostLabel(vanBookingStatus: VanBookingStatus): string {
+  if (vanBookingStatus === "booked") return "Vehicle booked";
+  if (vanBookingStatus === "awaiting_driver") return "Awaiting response";
+  return "Vehicle not booked";
+}
+
 export function passengerStatusLabel(status: JourneyStatus, departureDate: string): string {
   const effective = effectiveJourneyStatus(status, departureDate);
-  if (effective === "open") return "Open";
+  if (effective === "open") return "Seats available";
   if (effective === "full") return "Full";
   if (effective === "cancelled") return "Cancelled";
   return "Expired";

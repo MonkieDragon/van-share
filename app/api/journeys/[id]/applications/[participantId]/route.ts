@@ -3,6 +3,8 @@ import { createServiceClient } from "@/lib/supabaseServer";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ApplicationActionBody, DbRoute } from "@/types/journey";
 import { sendJoinApplicationResultToApplicant } from "@/lib/journeyEmails";
+import { agreedSeatPriceForParticipant } from "@/lib/journeyPricing";
+import { getOrCreatePassengerThread } from "@/lib/messaging";
 
 type Ctx = { params: Promise<{ id: string; participantId: string }> };
 
@@ -23,8 +25,9 @@ export async function PATCH(req: NextRequest, context: Ctx) {
     }
 
     const body = (await req.json()) as ApplicationActionBody;
-    if (body.action !== "accept" && body.action !== "deny") {
-      return NextResponse.json({ error: "action must be accept or deny" }, { status: 400 });
+    const isContact = body.action === "contact" || body.action === "accept";
+    if (!isContact && body.action !== "deny") {
+      return NextResponse.json({ error: "action must be contact or deny" }, { status: 400 });
     }
 
     const svc = createServiceClient();
@@ -84,14 +87,39 @@ export async function PATCH(req: NextRequest, context: Ctx) {
       return NextResponse.json({ error: "Not enough seats remaining" }, { status: 400 });
     }
 
-    const { error: cErr } = await svc
-      .from("journey_participants")
-      .update({ status: "confirmed" })
-      .eq("id", participantId);
-    if (cErr) throw cErr;
+    const counterpartyUserId = participant.user_id as string | null;
+    if (!counterpartyUserId) {
+      return NextResponse.json(
+        { error: "Applicant must have an account to message" },
+        { status: 400 },
+      );
+    }
 
     const nextTotal = current + pax;
     const nextStatus = nextTotal >= max ? "full" : "open";
+    const now = new Date().toISOString();
+    const agreedPrice = agreedSeatPriceForParticipant(
+      {
+        price_mode: journey.price_mode,
+        price_per_seat_php: journey.price_per_seat_php,
+        total_price_php: journey.total_price_php,
+        host_transport_mode: journey.host_transport_mode,
+        preferred_vehicle_type: journey.preferred_vehicle_type,
+        host_vehicle_type: journey.host_vehicle_type,
+        route,
+      },
+      nextTotal,
+    );
+
+    const { error: cErr } = await svc
+      .from("journey_participants")
+      .update({
+        status: "confirmed",
+        contact_unlocked_at: now,
+        agreed_price_per_seat_php: agreedPrice,
+      })
+      .eq("id", participantId);
+    if (cErr) throw cErr;
 
     const { error: jUpErr } = await svc
       .from("journeys")
@@ -102,6 +130,13 @@ export async function PATCH(req: NextRequest, context: Ctx) {
       .eq("id", journeyId);
     if (jUpErr) throw jUpErr;
 
+    const thread = await getOrCreatePassengerThread(
+      journeyId,
+      participantId,
+      user.id,
+      counterpartyUserId,
+    );
+
     await sendJoinApplicationResultToApplicant(
       journey as never,
       route,
@@ -110,7 +145,7 @@ export async function PATCH(req: NextRequest, context: Ctx) {
       true,
     );
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, threadId: thread.id });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 500 });

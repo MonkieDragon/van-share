@@ -48,16 +48,25 @@ select {
   border: 1px solid #ccc;
 }
 
-/* react-day-picker: days with at least one journey */
-.day-with-journeys button {
+/* react-day-picker: journey availability dots (search bar picker) */
+.journey-date-picker-popover .rdp-day {
   position: relative;
 }
-.day-with-journeys button::after {
+
+.journey-date-picker-popover .rdp-day_button {
+  /* Keep day numbers vertically centered; dot sits in cell below */
+  padding-top: 0;
+}
+
+.journey-date-picker-popover .rdp-day.day-with-journeys::after {
   content: "";
-  display: block;
+  position: absolute;
+  bottom: 0.2rem;
+  left: 50%;
+  transform: translateX(-50%);
   width: 5px;
   height: 5px;
   border-radius: 9999px;
   background: #2563eb;
-  margin: 2px auto 0;
+  pointer-events: none;
 }

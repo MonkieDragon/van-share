@@ -59,6 +59,9 @@ export default function SignupForm() {
     <div className="mx-auto max-w-md space-y-4 rounded-lg border border-gray-200 bg-white p-6 text-gray-900">
       <h1 className="text-xl font-bold text-gray-950">Sign up</h1>
       <p className="text-sm text-gray-800">
+        After sign-up you&apos;ll choose whether you&apos;re a traveler or van rental agent.
+      </p>
+      <p className="text-sm text-gray-800">
         Already have an account?{" "}
         <Link href={`/login?next=${encodeURIComponent(next)}`} className="font-semibold text-blue-700 underline">
           Log in

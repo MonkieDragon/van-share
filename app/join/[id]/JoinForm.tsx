@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AddressInput from "@/components/Passenger/AddressInput";
-import PhoneContactInput from "@/components/UI/PhoneContactInput";
-import { isValidStoredPhone } from "@/lib/createJourneyFormErrors";
 import { isJourneyHostedByUser } from "@/lib/journeyHost";
 import { effectiveJourneyStatus } from "@/lib/journeyLifecycle";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -18,9 +16,7 @@ export default function JoinForm() {
   const id = params.id as string;
 
   const [journey, setJourney] = useState<JourneyListItem | null | undefined>(undefined);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [displayName, setDisplayName] = useState<string | null>(null);
   const [pickupFlex, setPickupFlex] = useState("");
   const [, setPickupFlexLL] = useState<[number, number]>([10.33, 119.41]);
   const [dropFlex, setDropFlex] = useState("");
@@ -43,13 +39,24 @@ export default function JoinForm() {
       const u = data.session?.user;
       if (!u) {
         setAuthUser(null);
+        router.replace(`/login?next=/join/${id}`);
         return;
       }
       setAuthUser({ id: u.id, email: u.email });
-      if (u.email) setEmail(u.email);
-      const meta = u.user_metadata as { full_name?: string; name?: string } | undefined;
-      const n = meta?.full_name || meta?.name;
-      if (n) setName(n);
+      fetch("/api/profile")
+        .then((res) => (res.ok ? res.json() : null))
+        .then(
+          (data: {
+            profile?: { display_name?: string | null };
+            onboardingComplete?: boolean;
+          } | null) => {
+            if (!data?.onboardingComplete) {
+              router.replace(`/onboarding?next=${encodeURIComponent(`/join/${id}`)}`);
+              return;
+            }
+            setDisplayName(data.profile?.display_name?.trim() ?? null);
+          },
+        );
     });
     const {
       data: { subscription },
@@ -95,7 +102,7 @@ export default function JoinForm() {
   if (journey === null) {
     return (
       <div className="p-6 text-gray-900">
-        <p className="font-semibold">Journey not found.</p>
+        <p className="font-semibold">This journey is no longer available.</p>
         <Link href="/" className="mt-2 inline-block text-blue-700 underline">
           Home
         </Link>
@@ -132,20 +139,10 @@ export default function JoinForm() {
         setLoading(false);
         return;
       }
-      if (!isValidStoredPhone(phone)) {
-        setMsg(
-          "Contact number — enter a valid Philippine mobile (10 digits) or WhatsApp number with country code.",
-        );
-        setLoading(false);
-        return;
-      }
       const res = await fetch(`/api/journeys/${id}/participants`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name,
-          email,
-          phone,
           pickup_location,
           dropoff_location,
           passenger_count: passengerCount,
@@ -207,26 +204,11 @@ export default function JoinForm() {
         </p>
       ) : (
         <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <label className="block">
-            <span className="font-semibold text-gray-950">Name</span>
-            <input
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-gray-900"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </label>
-          <label className="block">
-            <span className="font-semibold text-gray-950">Email</span>
-            <input
-              type="email"
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-gray-900"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </label>
-          <PhoneContactInput className="block" value={phone} onChange={setPhone} />
+          {displayName && (
+            <p className="text-sm text-gray-800">
+              Joining as <span className="font-semibold text-gray-950">{displayName}</span>
+            </p>
+          )}
 
           {pickupIsFlexible && journey.route_id ? (
             <div>

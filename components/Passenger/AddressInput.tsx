@@ -1,7 +1,7 @@
 "use client";
 
 import GeocodeAddressInput from "@/components/Geocode/GeocodeAddressInput";
-import { pickupPresetsForRoute } from "@/lib/addressPresets";
+import { defaultPickForLeg, pickupPresetsForRoute } from "@/lib/addressPresets";
 import type { GeocodePick } from "@/lib/geocodeTypes";
 import { addressLabelForLeg, type AddressLeg } from "@/lib/routeAddressLabels";
 
@@ -12,6 +12,7 @@ interface AddressInputProps {
   leg?: AddressLeg;
   label?: string;
   placeholder?: string;
+  showPresetButtons?: boolean;
   onValidatedChange?: (valid: boolean, pick: GeocodePick | null) => void;
 }
 
@@ -22,10 +23,12 @@ export default function AddressInput({
   leg = "pickup",
   label,
   placeholder,
+  showPresetButtons = false,
   onValidatedChange,
 }: AddressInputProps) {
   const defaultLabel = label ?? addressLabelForLeg(routeId ?? null, leg);
   const presets = leg === "pickup" ? pickupPresetsForRoute(routeId ?? null) : [];
+  const defaultPick = defaultPickForLeg(routeId ?? null, leg);
 
   const onPick = (pick: GeocodePick) => {
     setAddress(pick.displayName);
@@ -39,6 +42,8 @@ export default function AddressInput({
       routeId={routeId}
       leg={leg}
       presets={presets}
+      defaultPick={defaultPick}
+      showPresetButtons={showPresetButtons}
       onPick={onPick}
       onClear={() => {
         setAddress("");

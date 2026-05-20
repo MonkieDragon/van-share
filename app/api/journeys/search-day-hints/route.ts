@@ -7,7 +7,6 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const routeId = searchParams.get("route_id")?.trim();
     const datesParam = searchParams.get("dates")?.trim() ?? "";
-    const passengers = Number(searchParams.get("passengers"));
     if (!routeId) {
       return NextResponse.json({ error: "route_id is required" }, { status: 400 });
     }
@@ -18,8 +17,6 @@ export async function GET(req: NextRequest) {
     if (dates.length === 0) {
       return NextResponse.json({ error: "dates is required" }, { status: 400 });
     }
-    const pax = Number.isFinite(passengers) && passengers >= 1 ? Math.floor(passengers) : 1;
-
     const supabase = createPublicServerClient();
     const { data, error } = await supabase
       .from("journeys")
@@ -32,8 +29,7 @@ export async function GET(req: NextRequest) {
     if (error) throw error;
 
     const rows = (data ?? []).map((r) => mapJourneyRow(r as Record<string, unknown>));
-    const withSeats = rows.filter((j) => j.max_passengers - j.total_passenger_count >= pax);
-    const dateSet = new Set(withSeats.map((j) => j.departure_date));
+    const dateSet = new Set(rows.map((j) => j.departure_date));
     return NextResponse.json({ dates: [...dateSet] });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";

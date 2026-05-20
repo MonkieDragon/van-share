@@ -1,7 +1,17 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { OperatorFleetVehicle } from "@/types/operator";
+
+export type ExpressedInterest = {
+  claimId: string;
+  operator_vehicle_id: string | null;
+  proposed_price_php: number | null;
+  vehicle_make: string | null;
+  vehicle_model: string | null;
+  vehicle_seat_count: number | null;
+};
 
 type Props = {
   journeyId: string;
@@ -9,6 +19,7 @@ type Props = {
   maxVanSeats: number;
   fleet: OperatorFleetVehicle[];
   disabled?: boolean;
+  expressedInterest?: ExpressedInterest | null;
 };
 
 export default function ClaimJourneyButton({
@@ -17,7 +28,9 @@ export default function ClaimJourneyButton({
   maxVanSeats,
   fleet,
   disabled,
+  expressedInterest,
 }: Props) {
+  const router = useRouter();
   const eligible = useMemo(
     () =>
       fleet.filter(
@@ -63,13 +76,81 @@ export default function ClaimJourneyButton({
         setMsg(data.error ?? "Could not send interest");
         return;
       }
-      window.location.reload();
+      router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Could not send interest");
     } finally {
       setLoading(false);
     }
   };
+
+  const withdraw = async () => {
+    if (!expressedInterest) return;
+    setLoading(true);
+    setMsg("");
+    try {
+      const res = await fetch(`/api/operator/interests/${expressedInterest.claimId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "withdraw" }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setMsg(data.error ?? "Could not withdraw");
+        return;
+      }
+      router.refresh();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Could not withdraw");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (expressedInterest) {
+    const fleetVehicle = expressedInterest.operator_vehicle_id
+      ? fleet.find((v) => v.id === expressedInterest.operator_vehicle_id)
+      : undefined;
+    const vehicleLabel = fleetVehicle
+      ? fleetVehicle.name
+      : [expressedInterest.vehicle_make, expressedInterest.vehicle_model].filter(Boolean).join(" ") ||
+        "Your vehicle";
+    const seatCount = fleetVehicle?.seat_count ?? expressedInterest.vehicle_seat_count;
+
+    return (
+      <div className="flex w-full max-w-xl flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
+          Interest expressed
+        </p>
+        <div className="text-sm text-gray-900">
+          <p className="font-semibold text-gray-950">{vehicleLabel}</p>
+          {fleetVehicle ? (
+            <p className="text-gray-800">
+              {fleetVehicle.make} {fleetVehicle.model}
+              {seatCount != null ? ` · ${seatCount} seats` : ""}
+            </p>
+          ) : seatCount != null ? (
+            <p className="text-gray-800">{seatCount} seats</p>
+          ) : null}
+        </div>
+        <p className="text-sm text-gray-800">
+          <span className="font-semibold text-gray-950">Proposed van price: </span>
+          {expressedInterest.proposed_price_php != null
+            ? `₱${expressedInterest.proposed_price_php.toLocaleString("en-PH")}`
+            : "Not specified"}
+        </p>
+        <button
+          type="button"
+          onClick={() => void withdraw()}
+          disabled={disabled || loading}
+          className="w-fit rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {loading ? "Withdrawing…" : "Withdraw interest"}
+        </button>
+        {msg && <p className="text-sm text-red-800">{msg}</p>}
+      </div>
+    );
+  }
 
   if (fleet.length === 0) {
     return (

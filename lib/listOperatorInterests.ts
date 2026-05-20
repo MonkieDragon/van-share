@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabaseServer";
+import { claimJourneyWithRouteEmbed } from "@/lib/operatorClaimEmbeds";
 import { mapJourneyRow } from "@/lib/listPublicJourneys";
 import type { DbOperatorClaim, JourneyListItem, OperatorClaimWithOperator } from "@/types/journey";
 
@@ -10,7 +11,7 @@ export async function listOperatorInterests(operatorId: string): Promise<Operato
   const svc = createServiceClient();
   const { data, error } = await svc
     .from("operator_claims")
-    .select("*, operators(*), journeys(*, routes(*))")
+    .select(`*, operators(*), ${claimJourneyWithRouteEmbed}`)
     .eq("operator_id", operatorId)
     .in("status", ["interested", "selected", "driver_confirmed", "declined_by_host"])
     .order("created_at", { ascending: false });

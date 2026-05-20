@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AddOperatorVehicleForm from "@/components/Operator/AddOperatorVehicleForm";
-import PhoneContactInput from "@/components/UI/PhoneContactInput";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type { OperatorVehicleInput } from "@/types/operator";
 
@@ -13,7 +12,6 @@ export default function OperatorRegistrationForm() {
   const router = useRouter();
   const [companyName, setCompanyName] = useState("");
   const [contactName, setContactName] = useState("");
-  const [phone, setPhone] = useState("");
   const [vehicles, setVehicles] = useState<SavedVehicle[]>([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
@@ -53,7 +51,6 @@ export default function OperatorRegistrationForm() {
         body: JSON.stringify({
           company_name: companyName,
           contact_name: contactName,
-          phone,
           vehicles: vehicles.map(({ key: _k, ...v }) => v),
         }),
       });
@@ -101,7 +98,6 @@ export default function OperatorRegistrationForm() {
             required
           />
         </label>
-        <PhoneContactInput className="block" value={phone} onChange={setPhone} />
       </section>
 
       <AddOperatorVehicleForm

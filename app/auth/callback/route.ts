@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { getAccountContext } from "@/lib/accountProfile";
+import { isPassengerOnboardingComplete } from "@/lib/profileOnboarding";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -31,6 +33,20 @@ export async function GET(request: Request) {
       },
     );
     await supabase.auth.exchangeCodeForSession(code);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const ctx = await getAccountContext(user.id);
+      if (ctx.isOperator) {
+        return NextResponse.redirect(`${origin}/operator/dashboard`);
+      }
+      if (!isPassengerOnboardingComplete(ctx.profile)) {
+        const onboardNext = encodeURIComponent(safeNext);
+        return NextResponse.redirect(`${origin}/onboarding?next=${onboardNext}`);
+      }
+    }
   }
 
   return NextResponse.redirect(`${origin}${safeNext}`);

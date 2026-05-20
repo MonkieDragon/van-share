@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import JourneyStatusBadges from "@/components/Journey/JourneyStatusBadges";
 import { effectiveJourneyStatus } from "@/lib/journeyLifecycle";
+import { findPassengerThreadId } from "@/lib/messaging";
 import { listMyJoinApplications } from "@/lib/listMyJoinApplications";
 import { createServiceClient } from "@/lib/supabaseServer";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -44,6 +45,13 @@ export default async function MyJourneysPage() {
 
   const hosted = (data ?? []).map((r) => mapJourneyRow(r as Record<string, unknown>));
   const joined = await listMyJoinApplications(user.id, user.email ?? "");
+  const joinedWithThreads = await Promise.all(
+    joined.map(async (app) => ({
+      app,
+      threadId:
+        app.status === "confirmed" ? await findPassengerThreadId(app.id) : null,
+    })),
+  );
 
   return (
     <div className="space-y-10 text-gray-900">
@@ -76,6 +84,12 @@ export default async function MyJourneysPage() {
                     vanBookingStatus={j.van_booking_status}
                     passengerStatus={effectiveJourneyStatus(j.status, j.departure_date)}
                     departureDate={j.departure_date}
+                    hostTransportMode={j.host_transport_mode}
+                    hostHasOwnVehicle={j.host_has_own_vehicle}
+                    hostVehicleType={j.host_vehicle_type}
+                    hostVehicleSeatsOffered={j.host_vehicle_seats_offered}
+                    hostVehicleMake={j.host_vehicle_make}
+                    hostVehicleModel={j.host_vehicle_model}
                   />
                   <p className="mt-2 font-semibold text-gray-950">{j.route?.name ?? j.route_id}</p>
                   <p className="text-sm text-gray-800">{j.departure_date}</p>
@@ -104,7 +118,7 @@ export default async function MyJourneysPage() {
           </p>
         ) : (
           <ul className="space-y-3">
-            {joined.map((app) => (
+            {joinedWithThreads.map(({ app, threadId }) => (
               <li
                 key={app.id}
                 className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
@@ -123,12 +137,22 @@ export default async function MyJourneysPage() {
                     {app.passenger_count === 1 ? "" : "s"}
                   </p>
                 </div>
-                <Link
-                  href={`/journeys/${app.journey.id}`}
-                  className="shrink-0 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                >
-                  View journey
-                </Link>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  {threadId && (
+                    <Link
+                      href={`/messages/${threadId}`}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                    >
+                      Messages
+                    </Link>
+                  )}
+                  <Link
+                    href={`/journeys/${app.journey.id}`}
+                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                  >
+                    View journey
+                  </Link>
+                </div>
               </li>
             ))}
           </ul>

@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import DateStrip from "@/components/Home/DateStrip";
-import PreferredAddressesPanel from "@/components/Home/PreferredAddressesPanel";
 import JourneyCard from "@/components/Journey/JourneyCard";
 import type { GeocodePick } from "@/lib/geocodeTypes";
 import { addDaysYmd } from "@/lib/journeyRouteEndpoints";
@@ -14,7 +13,7 @@ import { isJourneyHostedByUser } from "@/lib/journeyHost";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type { JourneyListItem } from "@/types/journey";
 
-const DualJourneyPreviewMaps = dynamic(() => import("@/components/Home/DualJourneyPreviewMaps"), {
+const BrowseMapPanel = dynamic(() => import("@/components/Home/BrowseMapPanel"), {
   ssr: false,
   loading: () => <div className="h-96 animate-pulse rounded-lg bg-gray-100" aria-hidden />,
 });
@@ -37,12 +36,6 @@ export default function SearchDayView() {
 
   const route_id = searchParams.get("route_id")?.trim() ?? "";
   const date = searchParams.get("date")?.trim() ?? "";
-  const passengersRaw = searchParams.get("passengers");
-  const passengers = useMemo(() => {
-    const n = Number(passengersRaw);
-    if (!Number.isFinite(n)) return 1;
-    return Math.min(10, Math.max(1, Math.floor(n)));
-  }, [passengersRaw]);
   const journeyParam = searchParams.get("journey")?.trim() ?? "";
 
   const ends = useMemo(() => endpointsFromRouteId(route_id), [route_id]);
@@ -50,18 +43,31 @@ export default function SearchDayView() {
   const [userPickup, setUserPickup] = useState<GeocodePick | null>(null);
   const [userDropoff, setUserDropoff] = useState<GeocodePick | null>(null);
   const [authUser, setAuthUser] = useState<{ id: string; email?: string | null } | null>(null);
+  const [isOperator, setIsOperator] = useState(false);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    supabase.auth.getSession().then(({ data }) => {
+    const load = async () => {
+      const { data } = await supabase.auth.getSession();
       const u = data.session?.user;
       setAuthUser(u ? { id: u.id, email: u.email } : null);
-    });
+      if (u) {
+        const res = await fetch("/api/profile");
+        if (res.ok) {
+          const body = (await res.json()) as { isOperator?: boolean };
+          setIsOperator(!!body.isOperator);
+        } else {
+          setIsOperator(false);
+        }
+      } else {
+        setIsOperator(false);
+      }
+    };
+    void load();
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_e, session) => {
-      const u = session?.user;
-      setAuthUser(u ? { id: u.id, email: u.email } : null);
+    } = supabase.auth.onAuthStateChange(() => {
+      void load();
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -79,9 +85,15 @@ export default function SearchDayView() {
     [router, searchParams],
   );
 
+  useEffect(() => {
+    if (searchParams.has("passengers")) {
+      replaceQuery({ passengers: null });
+    }
+  }, [searchParams, replaceQuery]);
+
   const searchUrl =
     route_id && /^\d{4}-\d{2}-\d{2}$/.test(date)
-      ? `/api/journeys/search?route_id=${encodeURIComponent(route_id)}&date=${encodeURIComponent(date)}&passengers=${passengers}`
+      ? `/api/journeys/search?route_id=${encodeURIComponent(route_id)}&date=${encodeURIComponent(date)}`
       : null;
 
   const { data: results = [], error: swrError, isLoading: loading } = useSWR<JourneyListItem[]>(
@@ -99,7 +111,7 @@ export default function SearchDayView() {
 
   const hintsUrl =
     route_id && stripDates.length === 5
-      ? `/api/journeys/search-day-hints?route_id=${encodeURIComponent(route_id)}&dates=${stripDates.join(",")}&passengers=${passengers}`
+      ? `/api/journeys/search-day-hints?route_id=${encodeURIComponent(route_id)}&dates=${stripDates.join(",")}`
       : null;
 
   const { data: hintsData } = useSWR(hintsUrl, hintsFetcher, { revalidateOnFocus: false });
@@ -150,11 +162,6 @@ export default function SearchDayView() {
     return `return=${encodeURIComponent(returnHref)}`;
   }, [returnHref]);
 
-  const userPickupLatLng = userPickup ? ([userPickup.lat, userPickup.lng] as [number, number]) : null;
-  const userDropoffLatLng = userDropoff
-    ? ([userDropoff.lat, userDropoff.lng] as [number, number])
-    : null;
-
   if (!ends) {
     return (
       <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
@@ -164,21 +171,20 @@ export default function SearchDayView() {
   }
 
   return (
-    <div className="grid w-full gap-4 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-start">
-      <DualJourneyPreviewMaps
+    <div className="grid w-full gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start">
+      <BrowseMapPanel
+        routeId={route_id}
         originEndpointId={ends.origin}
         destEndpointId={ends.dest}
         selectedJourney={selectedJourney}
-        userPickup={userPickupLatLng}
-        userDropoff={userDropoffLatLng}
+        userPickup={userPickup}
+        userDropoff={userDropoff}
+        onPickupPick={setUserPickup}
+        onDropoffPick={setUserDropoff}
+        hideAddressPanel={isOperator}
       />
       <div className="min-w-0 w-full space-y-3">
         <DateStrip selectedYmd={date} onSelectYmd={onDateStrip} hasJourneysByYmd={hasJourneysByYmd} />
-        <PreferredAddressesPanel
-          routeId={route_id}
-          onPickupPick={setUserPickup}
-          onDropoffPick={setUserDropoff}
-        />
         {err && (
           <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">{err}</p>
         )}
@@ -195,7 +201,6 @@ export default function SearchDayView() {
               <li key={j.id} className="w-full">
                 <JourneyCard
                   journey={j}
-                  joinPassengers={passengers}
                   selected={journeyParam === j.id}
                   onSelect={() => toggleJourney(j.id)}
                   detailQuery={detailQuery}

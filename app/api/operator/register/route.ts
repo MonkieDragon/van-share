@@ -4,7 +4,6 @@ import { parseVehicleList } from "@/lib/operatorVehicles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabaseServer";
 import type { RegisterOperatorBody } from "@/types/operator";
-import { isValidStoredPhone } from "@/lib/createJourneyFormErrors";
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,7 +19,6 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as RegisterOperatorBody;
     const company_name = body.company_name?.trim() ?? "";
     const contact_name = body.contact_name?.trim() ?? "";
-    const phone = body.phone?.trim() ?? "";
     const email = (user.email ?? "").trim();
 
     if (!company_name || !contact_name) {
@@ -28,9 +26,6 @@ export async function POST(req: NextRequest) {
     }
     if (!email) {
       return NextResponse.json({ error: "Account email is required" }, { status: 400 });
-    }
-    if (!isValidStoredPhone(phone)) {
-      return NextResponse.json({ error: "A valid contact phone number is required" }, { status: 400 });
     }
 
     const vehicles = parseVehicleList(body.vehicles);
@@ -54,7 +49,6 @@ export async function POST(req: NextRequest) {
       .insert({
         company_name,
         contact_name,
-        phone,
         email,
         verified: false,
         user_id: user.id,
@@ -84,7 +78,11 @@ export async function POST(req: NextRequest) {
 
     const { error: pErr } = await svc
       .from("profiles")
-      .update({ account_type: "operator", updated_at: new Date().toISOString() })
+      .update({
+        account_type: "operator",
+        onboarding_completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
       .eq("user_id", user.id);
 
     if (pErr) throw pErr;
